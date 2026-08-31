@@ -6,7 +6,7 @@ Marketplace de plugins pour [Claude Code](https://claude.com/claude-code).
 
 ```bash
 # Depuis GitHub
-/plugin marketplace add klif/claude-plugins-marketplace
+/plugin marketplace add Klif4/claude-plugins-marketplace
 
 # Ou depuis un chemin local (dev)
 /plugin marketplace add /home/klif/Work/claude-plugins-marketplace
@@ -54,9 +54,8 @@ Puis :
 │   └── hello-world/
 │       ├── .claude-plugin/
 │       │   └── plugin.json   # manifeste du plugin
-│       ├── commands/         # slash commands (.md)
+│       ├── skills/           # skills → /plugin:nom (dossier/SKILL.md)
 │       ├── agents/           # sous-agents (.md)
-│       ├── skills/           # skills (dossier/SKILL.md)
 │       ├── hooks/hooks.json  # hooks
 │       ├── scripts/          # scripts exécutables
 │       └── .mcp.json         # serveurs MCP
