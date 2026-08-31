@@ -1,0 +1,9 @@
+{
+  "name": "hello-world",
+  "description": "Plugin d'exemple servant de gabarit pour les futurs plugins.",
+  "version": "0.1.0",
+  "author": { "name": "klif" },
+  "homepage": "https://github.com/klif/claude-plugins-marketplace",
+  "license": "MIT",
+  "keywords": ["exemple", "template"]
+}

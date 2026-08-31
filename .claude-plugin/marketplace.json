@@ -1,0 +1,28 @@
+{
+  "name": "klif-marketplace",
+  "owner": {
+    "name": "klif",
+    "email": "klif.cheloul.freelance@gmail.com"
+  },
+  "metadata": {
+    "description": "Marketplace de plugins Claude Code.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "hello-world",
+      "source": "./plugins/hello-world",
+      "description": "Plugin d'exemple servant de gabarit pour les futurs plugins.",
+      "version": "0.1.0",
+      "author": {
+        "name": "klif"
+      },
+      "keywords": [
+        "exemple",
+        "template"
+      ],
+      "category": "productivity",
+      "strict": false
+    }
+  ]
+}

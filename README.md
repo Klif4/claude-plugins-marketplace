@@ -1,0 +1,73 @@
+# klif-marketplace
+
+Marketplace de plugins pour [Claude Code](https://claude.com/claude-code).
+
+## Installation
+
+```bash
+# Depuis GitHub
+/plugin marketplace add klif/claude-plugins-marketplace
+
+# Ou depuis un chemin local (dev)
+/plugin marketplace add /home/klif/Work/claude-plugins-marketplace
+```
+
+Puis :
+
+```bash
+/plugin install hello-world@klif-marketplace
+/plugin            # interface interactive
+```
+
+## Plugins disponibles
+
+| Plugin | Description |
+| --- | --- |
+| `hello-world` | Plugin d'exemple servant de gabarit. |
+
+## Ajouter un plugin
+
+1. Copier le gabarit :
+   ```bash
+   cp -r plugins/hello-world plugins/mon-plugin
+   ```
+2. Éditer `plugins/mon-plugin/.claude-plugin/plugin.json` (`name`, `description`, `version`).
+3. Ajouter une entrée dans `.claude-plugin/marketplace.json` :
+   ```json
+   {
+     "name": "mon-plugin",
+     "source": "./plugins/mon-plugin",
+     "description": "…",
+     "version": "0.1.0"
+   }
+   ```
+4. Valider : `./scripts/validate.sh`
+5. Tester localement : `/plugin marketplace update klif-marketplace`
+
+## Structure
+
+```
+.
+├── .claude-plugin/
+│   └── marketplace.json      # catalogue (obligatoire, à la racine)
+├── plugins/
+│   └── hello-world/
+│       ├── .claude-plugin/
+│       │   └── plugin.json   # manifeste du plugin
+│       ├── commands/         # slash commands (.md)
+│       ├── agents/           # sous-agents (.md)
+│       ├── skills/           # skills (dossier/SKILL.md)
+│       ├── hooks/hooks.json  # hooks
+│       ├── scripts/          # scripts exécutables
+│       └── .mcp.json         # serveurs MCP
+└── scripts/validate.sh
+```
+
+## Sources de plugins supportées
+
+`source` accepte un chemin relatif (`./plugins/x`), ou un objet :
+
+```json
+{ "source": { "source": "github", "repo": "owner/repo" } }
+{ "source": { "source": "git", "url": "https://exemple.com/repo.git" } }
+```
