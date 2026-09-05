@@ -20,8 +20,9 @@ export default defineConfig({
       reporter: ['text', 'json-summary'],
       reportsDirectory: 'coverage',
       include: ['src/**/*.ts'],
-      exclude: ['src/**/index.ts', 'src/infrastructure/**'],
+      exclude: ['src/**/index.ts', 'src/infrastructure/**', 'src/application/**'],
       // The craft loop gates every iteration on this threshold.
+      // Use cases and the UseCaseFactory live in src/domain, so they are gated too.
       // An uncovered domain branch is code nobody asked for.
       thresholds: {
         '**/src/domain/**': {

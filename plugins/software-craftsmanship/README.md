@@ -3,7 +3,7 @@
 BDD → tests → implementation, one Gherkin scenario at a time, driven by three
 agents that **never share context**.
 
-TypeScript · Vite · Vitest · Cucumber · Immutable · neverthrow · vitest-mock-extended
+TypeScript · Vite · Vitest · Cucumber · Immutable · neverthrow · js-joda · vitest-mock-extended
 
 ## Why three isolated agents
 
@@ -49,7 +49,9 @@ No scenario is done until all three pass:
 
 Gate 3 is not a vanity metric. It is the mechanical check that the implementation
 contains nothing the specification did not demand: an uncovered branch is code
-nobody asked for, and the implementer deletes it rather than defending it.
+nobody asked for, and the implementer deletes it rather than defending it. Use
+cases and the `UseCaseFactory` live in `src/domain/`, so they are under that gate
+too — `src/application/` and `src/infrastructure/` are not.
 
 ## Contents
 
@@ -86,12 +88,16 @@ that follows these rules, so hand-written code matches agent-written code.
 
 ```
 src/domain/                   entities, value objects, domain errors, ports
-src/application/              use cases
+src/domain/usecases/          use cases — business orchestration through the ports
+src/domain/UseCaseFactory.ts  builds every use case from ports
 src/infrastructure/           concrete adapters
+src/application/              composition root — instantiates the adapters, builds
+                              the factory, exposes the app (HTTP controllers, CLI)
 
 tests/domain/                 unit tests
-tests/application/            unit tests
-tests/fakes/                  in-memory adapters — unit suite only
+tests/domain/usecases/        unit tests for the use cases, built via the factory
+tests/application/            unit tests for controllers and composition
+tests/fakes/                  in-memory adapters and clocks — unit suite only
 tests/builders/               object mothers
 
 features/*.feature            Gherkin, English, business intent only
@@ -116,6 +122,11 @@ The package manager is **yarn**.
   boundary.
 - Tell, don't ask: `order.cancel()`, never `if (order.status === 'PENDING')`.
 - Hexagonal layering, dependency rule inward, ports named after the domain's need.
+- Use cases are domain code, in `src/domain/usecases/`, and only the
+  `UseCaseFactory` builds one — controllers, jobs and step definitions all ask the
+  factory. `src/application/` is the single place a concrete adapter is named.
+- Dates through `@js-joda/core`, never the native `Date`. "Now" comes from a `Clock`
+  port, so every time-dependent rule is testable at an exact instant.
 - Tests assert behaviour, never implementation. Real values, never `foo` or `123`.
 
 See `skills/craft-conventions/references/` for the detailed rules with worked

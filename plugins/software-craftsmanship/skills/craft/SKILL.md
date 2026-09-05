@@ -48,9 +48,9 @@ of to the tests.
 
 ## Preconditions
 
-1. Confirm the toolchain: `vitest`, `@cucumber/cucumber`, `immutable`, `neverthrow`
-   and `vitest-mock-extended` in `package.json`, plus the `test`, `test:acceptance`,
-   `coverage` and `typecheck` scripts. If anything is missing, run the
+1. Confirm the toolchain: `vitest`, `@cucumber/cucumber`, `immutable`, `neverthrow`,
+   `@js-joda/core` and `vitest-mock-extended` in `package.json`, plus the `test`,
+   `test:acceptance`, `coverage` and `typecheck` scripts. If anything is missing, run the
    `craft-setup` skill first.
 2. Require a git repository — the boundary control depends on it. Offer `git init`
    if absent.

@@ -51,13 +51,18 @@ FEATURE FILE
 EXISTING CODE — read what you need
 Ports:          <paths under src/domain/>
 Value objects:  <paths under src/domain/>
-Use cases:      <paths under src/application/>
+Use cases:      <paths under src/domain/usecases/>
+Use case factory: src/domain/UseCaseFactory.ts <if it exists>
 Existing tests: <paths under tests/ and features/steps/>
 
 ORDER
-1. Step definitions in features/steps/, driving the use case through its primary
-   port with in-memory adapters from features/steps/support/fakes/.
+1. Step definitions in features/steps/, asking the UseCaseFactory for the use case
+   the scenario exercises, with in-memory adapters from
+   features/steps/support/fakes/ and a clock fixed at the scenario's date.
 2. Then the Vitest unit tests in tests/ that those steps make necessary.
+
+Build use cases through the UseCaseFactory, never with `new`. Every date comes from
+@js-joda/core, written as a literal — never computed from the current date.
 
 features/steps/ must not import anything from tests/. Each suite owns its fakes;
 duplication between the two is intended.
@@ -92,6 +97,10 @@ CONSTRAINTS
 - No primitive obsession: value objects with a validating static factory.
 - Tell, don't ask. No getter that exists only to let a caller decide.
 - Declarative chaining, no imperative loop, no `let`.
+- Use cases in src/domain/usecases/, built only by src/domain/UseCaseFactory.ts.
+  src/application/ names the concrete adapters and exposes the app.
+- Dates through @js-joda/core, never the native Date. "Now" comes from the Clock
+  port, never from LocalDate.now() / Instant.now().
 - src/domain/** must reach 100% coverage. An uncovered branch is code nobody asked
   for: delete it. If it is legitimate behaviour with no test, report it — do not
   add a test.

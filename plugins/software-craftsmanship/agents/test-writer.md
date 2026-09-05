@@ -34,9 +34,10 @@ do not write it.
 
 ## Order of work — outside-in
 
-1. **Step definitions first.** They drive the use case through its **primary
-   port**, with in-memory adapters on the secondary side. They are what discovers
-   the API: the scenario dictates the shape of the use case, not the reverse.
+1. **Step definitions first.** They ask the `UseCaseFactory` for the use case the
+   scenario exercises, with in-memory adapters on the secondary side. They are what
+   discovers the API: the scenario dictates the shape of the use case, not the
+   reverse.
 2. **Then the unit tests** those steps make necessary: value objects, domain
    rules, use cases. Work down from the use case towards the objects.
 
@@ -54,7 +55,7 @@ Forbidden as a way to silence the compiler: `any`, `as unknown as`, `@ts-ignore`
 
 ## Fakes — each suite owns its own
 
-- `tests/fakes/**` for the unit tests.
+- `tests/fakes/**` for the unit tests — in-memory adapters and the fixed clock.
 - `features/steps/support/fakes/**` for the Cucumber steps.
 
 The two suites are **fully decoupled**. `features/**` never imports from
@@ -83,6 +84,26 @@ independence of each suite.
   named case tables and **real values**.
 - Every business branch of the scenario needs its test: the domain must reach 100%
   coverage once implemented.
+
+**Use cases and the factory**
+- Use cases live in `src/domain/usecases/`; their unit tests go in
+  `tests/domain/usecases/`.
+- Build a use case **through the `UseCaseFactory`**, never with
+  `new SomeUseCase(...)`: construct the factory with your fakes and mocks, then ask
+  it for the use case. The factory is domain code under the 100% gate, and it is
+  the same composition the running app uses — a test that bypasses it specifies a
+  wiring nobody runs.
+
+**Dates and time**
+- Every date, time, instant and duration comes from `@js-joda/core`. Never a native
+  `Date`, never an epoch `number`, never `date-fns` or `dayjs`.
+- Write real, literal dates: `LocalDate.parse('2026-03-12')`. Never compute an
+  expected date from the current one — a test that does passes today and fails on a
+  boundary day.
+- Whenever the code needs "now", inject a fake clock fixed at an exact instant
+  (`FixedClock.at('2026-03-12T09:00:00Z')`), chosen so the boundary the scenario
+  describes is visible in the test: the day before the deadline, the minute a
+  window closes.
 
 **Mocks**
 - `mock<Port>()` from `vitest-mock-extended`, and **only for ports**: the domain's

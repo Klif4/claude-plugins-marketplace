@@ -1,6 +1,6 @@
 ---
 name: craft-setup
-description: This skill should be used when the user asks to "set up the craft toolchain", "bootstrap a BDD TypeScript project", "add vitest and cucumber", "set up hexagonal architecture", "configure 100% domain coverage", or when the craft loop reports a missing dependency or script. It installs Vite, Vitest, Cucumber, Immutable, neverthrow and vitest-mock-extended with yarn, and lays out the hexagonal directory structure.
+description: This skill should be used when the user asks to "set up the craft toolchain", "bootstrap a BDD TypeScript project", "add vitest and cucumber", "set up hexagonal architecture", "configure 100% domain coverage", or when the craft loop reports a missing dependency or script. It installs Vite, Vitest, Cucumber, Immutable, neverthrow, js-joda and vitest-mock-extended with yarn, and lays out the hexagonal directory structure with use cases in the domain.
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
@@ -34,7 +34,7 @@ yarn init -y
 Use **yarn**, never npm.
 
 ```bash
-yarn add immutable neverthrow
+yarn add immutable neverthrow @js-joda/core
 yarn add -D typescript vite vitest @vitest/coverage-v8 \
             @cucumber/cucumber tsx vitest-mock-extended @types/node
 ```
@@ -43,10 +43,15 @@ yarn add -D typescript vite vitest @vitest/coverage-v8 \
 |---|---|
 | `immutable` | every iterable in the domain: `List`, `Map`, `Set`, `Record` |
 | `neverthrow` | `Result` / `ResultAsync` — the domain throws nothing |
+| `@js-joda/core` | every date, time, instant and duration — the native `Date` is banned |
 | `vitest` + `@vitest/coverage-v8` | unit tests and the 100% domain gate |
 | `@cucumber/cucumber` + `tsx` | executable Gherkin, TypeScript steps under ESM |
 | `vitest-mock-extended` | typed `mock<Port>()` for outgoing ports |
 | `vite` | build |
+
+Add `@js-joda/timezone` only if the domain reasons about named zones
+(`ZoneId.of('Europe/Paris')`); `@js-joda/core` alone covers UTC and fixed offsets.
+Do not install it speculatively.
 
 ## 3. Configuration
 
@@ -88,14 +93,28 @@ user can decide.
 ## 4. Layout
 
 ```bash
-mkdir -p src/{domain,application,infrastructure}
-mkdir -p tests/{domain,application,fakes,builders}
+mkdir -p src/domain/usecases src/infrastructure src/application
+mkdir -p tests/domain/usecases tests/application tests/fakes tests/builders
 mkdir -p features/steps/support/fakes
 ```
 
-Three layers under `src/`, their unit tests mirrored under `tests/`, and the
-acceptance suite under `features/`. The `craft-conventions` skill holds the
-rationale for this layout and the dependency rule it encodes.
+```
+src/domain/         entities, value objects, domain errors, ports, use cases,
+                    and the UseCaseFactory that builds them from ports
+src/infrastructure/ concrete adapters — implement the ports
+src/application/    composition root — instantiates the adapters, builds the
+                    factory, and exposes the app: HTTP controllers, CLI, entry point
+```
+
+Their unit tests are mirrored under `tests/`, and the acceptance suite lives under
+`features/`. The `craft-conventions` skill holds the rationale for this layout and
+the dependency rule it encodes.
+
+Two consequences worth stating at setup time. **Use cases are domain code**, so
+they sit under the 100% coverage gate along with the `UseCaseFactory` — which is
+covered because tests and step definitions build their use cases through the
+factory rather than with `new`. And **`src/application/` is the only layer that
+names a concrete adapter**: it is excluded from the coverage gate for that reason.
 
 One point matters at setup time: **the two fake directories are deliberate.**
 `features/steps/support/fakes/` and `tests/fakes/` hold the same in-memory adapters,

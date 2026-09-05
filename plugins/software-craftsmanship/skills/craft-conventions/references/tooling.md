@@ -47,7 +47,7 @@ coverage: {
   provider: 'v8',
   reporter: ['text', 'json-summary'],
   include: ['src/**/*.ts'],
-  exclude: ['src/**/index.ts', 'src/infrastructure/**'],
+  exclude: ['src/**/index.ts', 'src/infrastructure/**', 'src/application/**'],
   thresholds: {
     '**/src/domain/**': { lines: 100, branches: 100, functions: 100, statements: 100 },
   },
@@ -66,9 +66,27 @@ jq -r '
 ' coverage/coverage-summary.json
 ```
 
-`src/infrastructure/**` is excluded on purpose: adapters are covered by their own
-integration tests, not by the domain gate, and holding them to 100% pushes people
-towards mocking the library they are adapting.
+`src/infrastructure/**` and `src/application/**` are excluded on purpose: adapters
+are covered by their own integration tests, and the composition root is wiring.
+Holding either to 100% pushes people towards mocking the library they are adapting,
+or towards testing that a constructor was called.
+
+The gate covers `src/domain/**`, which now includes `src/domain/usecases/**` and
+`src/domain/UseCaseFactory.ts` — that is deliberate: a use case is business
+behaviour and every branch of it must be demanded by a test.
+
+## Dates
+
+`@js-joda/core` is a runtime dependency, imported by the domain like `immutable`
+and `neverthrow`. It needs no configuration.
+
+`@js-joda/timezone` is added only when the domain reasons about a named zone. It
+registers its data as a side effect, so import it once at the composition root
+(`src/application/`) and never from `src/domain/**`:
+
+```ts
+import '@js-joda/timezone'
+```
 
 ## Cucumber with TypeScript under ESM
 
