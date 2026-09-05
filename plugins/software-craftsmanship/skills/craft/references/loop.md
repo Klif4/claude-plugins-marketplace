@@ -3,26 +3,31 @@
 Every command below runs from the project root. The loop assumes a git repository
 and a working tree that is clean at the start of each iteration.
 
-## Two gates, two rhythms
+## One iteration = one feature file
 
-The loop iterates **per scenario** and gates at **two** frequencies:
+The loop iterates **per feature file**. One `test-writer` writes the step
+definitions and the unit tests of every scenario in the file; one `implementer`
+makes them all green; both gates then run on that file before it is committed.
 
 | Gate | Command | When | What it proves |
 |---|---|---|---|
-| Fast | `yarn craft:verify:fast --scenario "<title>" <unit test paths>` | every scenario, at 3d and 3g | this scenario is red, then green, and the project typechecks |
-| Full | `yarn craft:verify` | once per **feature file**, at 3j | the whole unit suite is green, domain coverage is 100%, every scenario is green |
+| Fast | `yarn craft:verify:fast --feature <path> <unit test paths>` | at 3d, at 3g, and inside both agents | the file's scenarios are red, then green, and the project typechecks |
+| Full | `yarn craft:verify` | at 3h, once the fast gate is green | the whole unit suite is green, domain coverage is 100%, every scenario of every file is green |
 
-The full gate re-runs everything. Running it once per scenario means that at
-scenario 20 you re-run nineteen already-green scenarios and re-instrument the whole
-domain for coverage, twice per iteration — that is the quadratic cost that makes
-late iterations crawl, and it is not what makes the loop correct. The fast gate is
-what drives one scenario red-to-green; the full gate is what catches the regression
-and the coverage hole, and it only has to run before the feature is called done.
+The two gates keep their split even though both now run once per file. The fast
+gate is what the agents run — the implementer runs it after every edit, and the
+full gate's coverage instrumentation over the whole domain plus every scenario
+already delivered costs minutes per attempt. The full gate runs once, at the end of
+the iteration, and it is what catches the scenario in an earlier feature file this
+one broke and the domain branch no test demands.
 
-Keep the agent granularity at the scenario. Handing a whole feature file to one
-`implementer` buys the same wall-clock saving, but it makes the design big-bang
-instead of emergent, and a failing gate then names a diff spanning eight scenarios
-with no way to tell which one broke.
+The agent granularity is the feature file, not the scenario. A feature file is one
+business capability, so the design that emerges from it is coherent across its
+scenarios instead of being bent one scenario at a time, and one iteration costs two
+agent launches instead of two per scenario. The cost is real and worth stating: a
+red gate names a diff spanning the whole file, so recovery is coarser. The gate
+digest names the failing scenario and the failing test file, which is what makes it
+workable — read it before relaunching.
 
 ## Two lines of enforcement: a hook, then git
 
@@ -102,21 +107,24 @@ git diff --cached --name-only -- tests features
 ## Phase 3d — confirm red
 
 ```bash
-yarn craft:verify:fast --scenario "<exact scenario title>" <the tests/ paths from 3c>
+yarn craft:verify:fast --feature <the feature file> <the tests/ paths from 3c>
 ```
 
 It must fail. The unit gate runs only the test files just written, the acceptance
-gate runs only this scenario, and neither carries coverage instrumentation, so this
-takes seconds. The script escapes the title itself and matches an outline's
-substituted placeholders — pass the title verbatim, quoted.
+gate runs only this file's scenarios, and neither carries coverage instrumentation,
+so this takes seconds. The feature file is passed positionally to `cucumber-js`, so
+no scenario of any other file runs.
 
-Do not run the full `yarn craft:verify` here. Proving red does not need the other
-nineteen scenarios re-run; the fast gate's first red is proof enough.
+Do not run the full `yarn craft:verify` here. Proving red does not need the feature
+files already delivered re-run; the fast gate's first red is proof enough.
 
-A scenario that is already green here means the step definitions assert nothing, or
+A file that is already green here means the step definitions assert nothing, or
 assert something already true. Relaunch a fresh `test-writer` with that fact,
 once. If it happens twice, stop and show the user the step definitions — the
-scenario itself is probably not testable as written.
+scenarios themselves are probably not testable as written.
+
+If only *some* scenarios of the file are red, that is the normal state and the gate
+is red: cucumber fails the run as a whole. Do not narrow the gate to the red ones.
 
 ## Phase 3f — after the implementer
 
@@ -144,107 +152,25 @@ not negotiable.
 ## Phase 3g — the fast gate
 
 ```bash
-yarn craft:verify:fast --scenario "<exact scenario title>" <the tests/ paths from 3c>
+yarn craft:verify:fast --feature <the feature file> <the tests/ paths from 3c>
 ```
 
 | Check | What it runs |
 |---|---|
 | The new unit tests are green | `vitest run --reporter=dot <those files>` |
-| The scenario is green | `cucumber-js --name "<title>"` |
+| Every scenario of this file is green | `cucumber-js <the feature file>` |
 | The project typechecks | `tsc --noEmit` |
 
 `tsc` stays whole-project in both modes — it is cheap and it is the one check that
-catches a signature this scenario broke elsewhere.
+catches a signature this file broke elsewhere.
 
 What the fast gate deliberately does **not** see: a previously passing unit test
-this iteration broke, and a domain file short of 100%. Both are the full gate's job
-at 3j. Do not "just also run" `yarn craft:verify` here to be safe — that is exactly
-the per-scenario full run this design removed.
+this iteration broke, a scenario of another feature file it broke, and a domain
+file short of 100%. All three are the full gate's job at 3h.
 
-## Phase 3h — mapping a failure to a role
+## Phase 3h — the full gate
 
-Both gates name the failing check on their `FAIL` line; map that to a role:
-
-| Symptom | Role to relaunch | What to inject |
-|---|---|---|
-| `scenario "<title>"` red, unit green | `implementer` | the Cucumber tail, the scenario title |
-| `unit tests` red on the new tests | `implementer` | the Vitest tail |
-| `unit suite` red on a **previously passing** test *(full gate only)* | `implementer` | the tail, flagged as a regression |
-| Coverage short, uncovered lines are dead code *(full gate only)* | `implementer` | the shortfall list, instruction to delete |
-| Coverage short, uncovered lines are legitimate behaviour *(full gate only)* | `test-writer` | the shortfall list, the scenario |
-| `typecheck` red, `src` only | `implementer` | the `tsc` tail |
-| `typecheck` red, `tests` only | `test-writer` | the `tsc` tail |
-
-Inject the tail the script printed, not a re-run with a verbose reporter. If the
-digest genuinely is not enough to place the failure, run the one raw command for
-that gate **in this session** and inject only the relevant lines — never hand a
-full transcript to an agent.
-
-Read the uncovered lines before deciding between the two coverage rows. A guard
-clause no scenario requires is dead code and gets deleted; a business branch the
-scenario implies but no test asserts is a specification hole and goes back to the
-test-writer.
-
-Every relaunch is a **new `Agent` call**. Never `SendMessage` a previous agent:
-a fresh context re-reads the current state of the files instead of reasoning from a
-stale mental model of what it wrote earlier.
-
-**Relaunching a `test-writer` after the implementer has run** — the typecheck-red-
-on-tests row, or a coverage row at the full gate before its fix is committed —
-needs one step first:
-
-```bash
-git add -A -- src
-```
-
-The index then holds both the test snapshot and the implementer's work. Without
-it, the 3c check that follows the relaunch lists every `src/` file the implementer
-touched as unstaged, reads it as a violation, and reverts the implementation. After
-the relaunch, run 3c again, then re-run the fast gate.
-
-Three attempts maximum per scenario. Beyond that, the problem is upstream — the
-scenario is ambiguous, or the tests over-specify — and it is the user's call.
-
-A failure at the **full gate** (3j) names a regression or a coverage hole, and its
-cause is somewhere in the scenarios of that feature file, not necessarily the last
-one. Relaunch on the file the digest names — the coverage shortfall lists domain
-files, and a red unit test names its own file. Same three-attempt budget, counted
-for the feature file.
-
-## Phase 3i — regenerate the map, then commit
-
-```bash
-git diff --cached --name-only -- src/domain   # empty? skip craft:map
-yarn craft:map
-git add -A
-git commit -m "feat(<domain>): <scenario title>"
-```
-
-`craft:map` rewrites `.craft/api-map.d.ts` from the code that just went green: the
-public signatures of `src/domain`, no method bodies. It is the only thing the next
-iteration's agents receive about the code already written, so it stays **per
-scenario** — a stale map is what makes the next test-writer reinvent a value object
-that already exists, which costs far more than the `tsc` run.
-
-Skip it only when this iteration changed nothing under `src/domain` — a scenario
-satisfied by existing domain code and a new adapter. The map would come out
-identical.
-
-It is `tsc` output, so it cannot drift from the code. No agent ever writes it, and
-`.craft/` is gitignored: `git add -A` will not pick it up.
-
-If `craft:map` fails while the gates passed, the cause is `tsconfig.map.json`, not
-the domain — report it and keep going; a missing map degrades the next iteration,
-it does not break it. The script wipes its staging directory before every run, so a
-failed run never leaks stale declarations into the next map.
-
-One scenario, one commit. The history then reads as the list of business behaviours
-delivered, and any commit can be reverted without breaking another scenario.
-
-## Phase 3j — the full gate, at the end of each feature file
-
-Run this after the **last scenario of a feature file** goes green and is committed,
-before moving to the next file:
+Once the fast gate is green, and before committing:
 
 ```bash
 yarn craft:verify
@@ -265,15 +191,6 @@ domain files short of 100% with their percentages — read straight from
 `coverage/coverage-summary.json`, not from the coverage table, which lists every
 file whether it is short or not.
 
-Route the failure with the 3h table, relaunch a fresh agent, and once it is green
-commit the fix on its own:
-
-```bash
-yarn craft:map
-git add -A
-git commit -m "fix(<domain>): <what the full gate caught>"
-```
-
 Never replace this by the raw four commands to "see more". Their full output is
 several thousand tokens, it lands in the agent context on every relaunch, and the
 digest already names the failing gate.
@@ -281,3 +198,88 @@ digest already names the failing gate.
 A feature file is done when this gate is green. The loop moves to the next file
 only then — carrying a regression into the next feature file is what makes it
 untraceable.
+
+## Phase 3i — mapping a failure to a role
+
+Both gates name the failing check on their `FAIL` line; map that to a role:
+
+| Symptom | Role to relaunch | What to inject |
+|---|---|---|
+| A scenario of this file red, unit green | `implementer` | the Cucumber tail, the titles of the failing scenarios |
+| `unit tests` red on the new tests | `implementer` | the Vitest tail |
+| `unit suite` red on a **previously passing** test *(full gate only)* | `implementer` | the tail, flagged as a regression |
+| A scenario of **another** feature file red *(full gate only)* | `implementer` | the Cucumber tail, flagged as a regression |
+| Coverage short, uncovered lines are dead code *(full gate only)* | `implementer` | the shortfall list, instruction to delete |
+| Coverage short, uncovered lines are legitimate behaviour *(full gate only)* | `test-writer` | the shortfall list, the scenario that implies the branch |
+| `typecheck` red, `src` only | `implementer` | the `tsc` tail |
+| `typecheck` red, `tests` only | `test-writer` | the `tsc` tail |
+
+Inject the tail the script printed, not a re-run with a verbose reporter. If the
+digest genuinely is not enough to place the failure, run the one raw command for
+that gate **in this session** and inject only the relevant lines — never hand a
+full transcript to an agent.
+
+A red gate over a whole feature file names a diff spanning all its scenarios, so
+name the failing scenarios and test files explicitly in the relaunch prompt: that
+is what tells the fresh agent where in the file to look. Never ask it to "fix the
+feature" without that.
+
+Read the uncovered lines before deciding between the two coverage rows. A guard
+clause no scenario requires is dead code and gets deleted; a business branch a
+scenario implies but no test asserts is a specification hole and goes back to the
+test-writer.
+
+Every relaunch is a **new `Agent` call**. Never `SendMessage` a previous agent:
+a fresh context re-reads the current state of the files instead of reasoning from a
+stale mental model of what it wrote earlier.
+
+**Relaunching a `test-writer` after the implementer has run** — the typecheck-red-
+on-tests row, or a coverage row at the full gate — needs one step first:
+
+```bash
+git add -A -- src
+```
+
+The index then holds both the test snapshot and the implementer's work. Without
+it, the 3c check that follows the relaunch lists every `src/` file the implementer
+touched as unstaged, reads it as a violation, and reverts the implementation. After
+the relaunch, run 3c again, then re-run the fast gate.
+
+Three attempts maximum per feature file. Beyond that, the problem is upstream — the
+scenarios are ambiguous, or the tests over-specify — and it is the user's call.
+Report which scenarios of the file are green and which are not, rather than
+abandoning the file as a block.
+
+## Phase 3j — regenerate the map, then commit
+
+```bash
+git status --porcelain -- src/domain   # empty? skip craft:map
+yarn craft:map
+git add -A
+git commit -m "feat(<domain>): <feature title>"
+```
+
+`craft:map` rewrites `.craft/api-map.d.ts` from the code that just went green: the
+public signatures of `src/domain`, no method bodies. It is the only thing the next
+iteration's agents receive about the code already written, so it is regenerated
+before every commit — a stale map is what makes the next test-writer reinvent a
+value object that already exists, which costs far more than the `tsc` run.
+
+Skip it only when this iteration changed nothing under `src/domain` — a feature
+satisfied by existing domain code and a new adapter. The map would come out
+identical. `git status --porcelain` is what to ask, not `git diff`: a recovery may
+have staged `src/`, and staged changes are invisible to an unqualified `git diff`.
+
+It is `tsc` output, so it cannot drift from the code. No agent ever writes it, and
+`.craft/` is gitignored: `git add -A` will not pick it up.
+
+If `craft:map` fails while the gates passed, the cause is `tsconfig.map.json`, not
+the domain — report it and keep going; a missing map degrades the next iteration,
+it does not break it. The script wipes its staging directory before every run, so a
+failed run never leaks stale declarations into the next map.
+
+One feature file, one commit, both gates green in it. The history then reads as the
+list of business capabilities delivered, and any commit can be reverted without
+breaking another feature. A file large enough that its commit is unreviewable is a
+sign the `.feature` covers more than one capability — split the file at step 1, not
+the commit here.

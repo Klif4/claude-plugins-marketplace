@@ -103,12 +103,13 @@ landing in an agent's context on every attempt. It also runs the unit suite **on
 for both the suite gate and the coverage gate, where `yarn test` followed by
 `yarn coverage` runs it twice.
 
-`craft:verify:fast --scenario "<title>" <unit test paths>` is the **per-scenario
-gate**: that scenario, those test files, and `tsc` — no coverage instrumentation and
-no re-run of the scenarios already delivered. The loop runs it on every scenario and
-runs the full gate once per feature file. Running the full gate per scenario instead
-re-verifies every already-green scenario on every iteration, which is what makes a
-twenty-scenario feature crawl.
+`craft:verify:fast --feature <path> <unit test paths>` is the **feature-file
+gate**: the scenarios of that one file, those test files, and `tsc` — no coverage
+instrumentation and no re-run of the feature files already delivered. The loop
+drives one feature file per iteration, and this is the gate its agents run while
+they work; the full gate runs once, after it is green. Handing the agents the full
+gate instead costs minutes per attempt, for checks that only need to hold once the
+file is done.
 
 `craft:map` regenerates `.craft/api-map.d.ts`: every public signature of
 `src/domain`, no method bodies. It is what a fresh agent reads to learn what

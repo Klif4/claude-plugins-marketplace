@@ -24,10 +24,10 @@ yarn test:acceptance --name "An order just below the minimum is refused"
 `--name` is a **regex**, not a literal, and it is not anchored: a title containing
 `.`, `(` or `?` matches more than you think, "An order is refused" also selects
 "An order is refused twice", and a `Scenario Outline` title is matched after its
-placeholders have been substituted with the row's values. `yarn craft:verify:fast`
-handles all three — it escapes the title, anchors it with `^…$`, and turns
-`<placeholder>` into `.+` — so prefer it when you want one scenario plus its unit
-tests and a typecheck.
+placeholders have been substituted with the row's values. Anchor it with `^…$` when
+one title is a prefix of another. To run a whole feature file plus its unit tests
+and a typecheck, `yarn craft:verify:fast --feature <path>` selects by path and
+sidesteps the regex entirely.
 
 `--name` matches the scenario title as a regular expression. Quote it, and use the
 title exactly as written in the `.feature` file. For a `Scenario Outline`, the
@@ -94,14 +94,15 @@ just as usable by hand:
 
 | Script | What it does |
 |---|---|
-| `yarn craft:verify:fast --scenario "<title>" <unit test paths>` | one scenario, the unit test files that specify it, and `tsc` — no coverage instrumentation, no re-run of the scenarios already delivered |
+| `yarn craft:verify:fast --feature <path> <unit test paths>` | the scenarios of one feature file, the unit test files that specify them, and `tsc` — no coverage instrumentation, no re-run of the feature files already delivered |
 | `yarn craft:verify` | the whole unit suite, domain coverage, every acceptance scenario and `tsc`, in one run — one line per gate when green, the tail of the output plus the coverage shortfall when red |
 | `yarn craft:map` | regenerates `.craft/api-map.d.ts`: every public signature of `src/domain`, no method bodies, emitted by `tsc` |
 
-The two gates run at different rhythms: the fast one on every scenario, the full
-one once per feature file. The full gate re-runs everything, so running it per
-scenario re-verifies every already-green scenario each time — a cost that grows
-with the feature and buys nothing that the end-of-file run does not catch.
+The loop drives one feature file per iteration. The fast gate is what its agents
+run while they work — the implementer after every edit — and the full gate runs
+once, when the fast one is green. The full gate re-runs everything under coverage
+instrumentation, so putting it in an agent's hands costs minutes per attempt and
+catches nothing the end-of-iteration run misses.
 
 All three exist to keep an agent's context small. A fresh agent has to be told what
 already exists, and the map says it in ~1 line per export instead of forty files;

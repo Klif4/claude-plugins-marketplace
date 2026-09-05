@@ -1,6 +1,6 @@
 # software-craftsmanship
 
-BDD → tests → implementation, one Gherkin scenario at a time, driven by three
+BDD → tests → implementation, one Gherkin feature file at a time, driven by three
 agents that **never share context**.
 
 TypeScript · Vitest · Cucumber · Immutable · neverthrow · js-joda · vitest-mock-extended
@@ -27,12 +27,27 @@ features/**/*.feature      tests/**                              src/**
 The implementer receives file **paths**, never the test-writer's reasoning. It has
 to read the tests, because the tests are the specification.
 
+## One iteration = one feature file
+
+The unit of work is the `.feature` file. One `test-writer` writes the step
+definitions and unit tests of **every** scenario in it, one `implementer` makes them
+all green, both gates run, and the file lands as a single commit.
+
+A feature file is one business capability, so the design that emerges from it is
+coherent across its scenarios rather than bent one scenario at a time, and a
+twenty-scenario feature costs two agent launches instead of forty. The cost is real
+and worth knowing: a red gate names a diff spanning the whole file, so recovery is
+coarser than it would be per scenario. The gate digest names the failing scenarios
+and test files, and the relaunch prompt passes those names on — that is what keeps
+it workable. A file whose commit is too big to review is a file that should have
+been split at the Gherkin stage.
+
 ## Bounded context per iteration
 
-Three fresh agents per scenario means each one starts empty and has to be told what
+Fresh agents per feature file means each one starts empty and has to be told what
 already exists. Told badly — "here is the path of every file written so far" — the
-cost of an iteration grows with the size of the code: three paths at scenario 1,
-eighty at scenario 20, three times over.
+cost of an iteration grows with the size of the code: three paths at the first
+file, eighty at the tenth, twice over.
 
 So the loop hands over one generated file instead, `.craft/api-map.d.ts`: every
 public signature of `src/domain`, no method bodies, emitted by `tsc` and
@@ -66,21 +81,21 @@ outside the agent's scope. Deterministic, no loop-state file, and no friction wh
 you work by hand outside the loop. Anything that reaches this check went around
 the hook, and the closing report says so.
 
-## Two gates, two rhythms
+## Two gates per iteration
 
-Every scenario passes a **fast gate** — itself and nothing else:
+The agents work against a **fast gate** — this feature file and nothing else:
 
 ```bash
-yarn craft:verify:fast --scenario "<title>" <the unit test files just written>
+yarn craft:verify:fast --feature <path> <the unit test files just written>
 ```
 
 | Check | What it runs |
 |---|---|
 | The new unit tests are green | `vitest run --reporter=dot <those files>` |
-| The scenario is green | `cucumber-js --name "<title>"` |
+| Every scenario of this file is green | `cucumber-js <path>` |
 | The project typechecks | `tsc --noEmit` |
 
-Every **feature file** then passes the full gate before the loop moves on:
+Once it is green, the file passes the full gate before the loop moves on:
 
 ```bash
 yarn craft:verify
@@ -93,16 +108,12 @@ yarn craft:verify
 | Every scenario is green | `cucumber-js` over the whole feature set |
 | The project typechecks | `tsc --noEmit` |
 
-The split is what keeps the loop affordable. The full gate re-runs everything, so
-running it on every scenario means re-verifying nineteen green scenarios to deliver
-the twentieth — quadratic wall-clock that catches nothing the end-of-file run would
-miss. The fast gate drives one scenario red-to-green; the full gate catches the
-regression and the coverage hole.
-
-The agent granularity stays at the scenario, though. Handing a whole feature file
-to one implementer saves the same time, but it makes the design big-bang instead of
-emergent, and a red gate then points at a diff spanning eight scenarios with no way
-to tell which one broke.
+The split is what keeps the loop affordable. The implementer re-runs its gate after
+every edit, and the full gate re-instruments the whole domain for coverage and
+re-runs every feature file already delivered — minutes per attempt. So the fast gate
+drives the file red-to-green, and the full gate runs once at the end of the
+iteration, where it catches the feature this one broke and the branch no test
+demands.
 
 Each exit code is the verdict. Both print one line per check when green, the tail of
 the output when red — because that output is what gets injected into the next

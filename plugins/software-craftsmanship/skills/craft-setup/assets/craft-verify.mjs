@@ -4,15 +4,16 @@
 // Every line this prints lands in an agent's context, so it prints a digest and
 // not a transcript: one line per gate when green, the tail of the output when red.
 //
-// FULL (default) — the feature-file gate. The whole unit suite, domain coverage at
-// 100%, every acceptance scenario, and tsc. Run once per feature file, not once per
-// scenario: for N scenarios the per-scenario form re-runs N-1 already-green
-// scenarios every time, which is what makes late iterations crawl.
+// FULL (default) — the project gate. The whole unit suite, domain coverage at
+// 100%, every acceptance scenario, and tsc. Run once per feature file, after the
+// fast gate is green: it is what catches a regression in a feature file already
+// delivered and a domain branch no test demands.
 //
-// FAST (--fast --scenario "<title>" [unit test paths]) — the per-scenario gate.
-// Only the scenario being driven and only the unit test files that specify it, with
-// no coverage instrumentation. Seconds instead of minutes. It cannot see a
-// regression or a coverage hole; the full gate is what catches those.
+// FAST (--fast --feature <path> [unit test paths]) — the feature-file gate. Only
+// the scenarios of the file being driven and only the unit test files that specify
+// them, with no coverage instrumentation. Seconds instead of minutes. It cannot see
+// a regression in another feature file or a coverage hole; the full gate is what
+// catches those.
 //
 // Exit code is the verdict in both modes.
 import { spawnSync } from 'node:child_process'
@@ -22,9 +23,9 @@ const TAIL = 40
 
 const argv = process.argv.slice(2)
 const fast = argv.includes('--fast')
-const scenarioAt = argv.indexOf('--scenario')
-const scenario = scenarioAt === -1 ? undefined : argv[scenarioAt + 1]
-const paths = argv.filter((arg, index) => !arg.startsWith('--') && index !== scenarioAt + 1)
+const featureAt = argv.indexOf('--feature')
+const feature = featureAt === -1 ? undefined : argv[featureAt + 1]
+const paths = argv.filter((arg, index) => !arg.startsWith('--') && index !== featureAt + 1)
 
 const run = (label, command, args) => {
   const { stdout, stderr, status, error } = spawnSync(command, args, {
@@ -70,24 +71,20 @@ const reportCoverageShortfall = () => {
   )
 }
 
-// `--name` is a regex matched against the pickle name, so the title has to be
-// escaped and anchored: unanchored, "An order is refused" also selects "An order
-// is refused twice", and the gate then reports on a scenario nobody asked about.
-// An outline's placeholders are already substituted in that name, so `<amount>`
-// becomes the row's value: match anything there rather than the literal.
-const titlePattern = (title) =>
-  `^${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/<[^>]+>/g, '.+')}$`
-
 if (fast) {
-  if (!scenario) {
-    console.error('--fast requires --scenario "<exact scenario title>".')
+  if (!feature) {
+    console.error('--fast requires --feature <path to the .feature file>.')
+    process.exit(2)
+  }
+  if (!existsSync(feature)) {
+    console.error(`--feature: ${feature} does not exist.`)
     process.exit(2)
   }
 
-  // Only unit test files: step definitions are cucumber's, not vitest's. A scenario
-  // driven by step definitions alone leaves nothing to filter on, and an unmatched
-  // filter makes vitest exit non-zero on "no test files found" — fall back to the
-  // whole unit suite, still far cheaper than the instrumented run.
+  // Only unit test files: step definitions are cucumber's, not vitest's. A feature
+  // file driven by step definitions alone leaves nothing to filter on, and an
+  // unmatched filter makes vitest exit non-zero on "no test files found" — fall
+  // back to the whole unit suite, still far cheaper than the instrumented run.
   const units = paths.filter((path) => path.startsWith('tests/') && existsSync(path))
   if (paths.length > 0 && units.length === 0) {
     console.log('note: no unit test file among the paths given — running the whole unit suite.')
@@ -95,7 +92,10 @@ if (fast) {
 
   const unitLabel = units.length > 0 ? `unit tests (${units.length} file(s))` : 'unit suite'
   if (!run(unitLabel, 'vitest', ['run', '--reporter=dot', ...units])) process.exit(1)
-  if (!run(`scenario "${scenario}"`, 'cucumber-js', ['--name', titlePattern(scenario)])) process.exit(1)
+  // The feature file is passed positionally: cucumber.mjs declares no `paths`, so
+  // this selection replaces the default features/**/*.feature instead of adding to
+  // it, and the run covers exactly the scenarios of this file.
+  if (!run(`scenarios of ${feature}`, 'cucumber-js', [feature])) process.exit(1)
   if (!run('typecheck', 'tsc', ['--noEmit'])) process.exit(1)
 
   console.log('\nFast gate green. Coverage and regressions are checked by `yarn craft:verify`.')
