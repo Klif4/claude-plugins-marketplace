@@ -68,15 +68,27 @@ terms, data. The ubiquitous language of the domain is English.
 - One scenario = one observable behaviour = one single reason to fail.
 
 **Consistency**
-- Before writing, read the existing `.feature` files (Glob then Read) and reuse
-  **exactly** the same wording for the same concepts. One notion, one phrase.
+- Reuse **exactly** the wording already in use for a concept. One notion, one
+  phrase. The manager hands you the list of existing scenario titles: that list is
+  the vocabulary.
 - Keep steps reusable: prefer a parameterised phrase over a one-off sentence.
+
+## Reading discipline
+
+You start with an empty context, and everything you read you pay for.
+
+- The scenario-title list you were given carries the vocabulary. **Do not read the
+  feature files to find it.**
+- Open a `.feature` file only when you are adding scenarios to that file, and open
+  that one only.
+- Never glob the whole tree, and never look outside `features/`. You have no
+  business in `src/`, `tests/` or `node_modules/`.
 
 ## Method
 
-1. Read every existing `features/**/*.feature` and any business material provided.
+1. Read the scenario titles you were given, plus any business material provided.
 2. Name the business rules at play.
-3. Write `features/<domain>.feature`.
+3. Write `features/<domain>.feature`, opening it first if it already exists.
 4. Re-read against each rule above and fix what drifts.
 
 ## Final report

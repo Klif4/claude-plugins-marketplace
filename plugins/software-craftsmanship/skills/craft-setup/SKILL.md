@@ -55,15 +55,19 @@ Do not install it speculatively.
 
 ## 3. Configuration
 
-Copy from `assets/`, adapting nothing unless the project already diverges:
+Copy from `assets/`, adapting nothing unless the project already diverges
+(`mkdir -p scripts` first — two of them land there):
 
 | Asset | Destination | What matters in it |
 |---|---|---|
 | `assets/tsconfig.json` | `tsconfig.json` | `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `@domain`/`@application`/`@infrastructure` aliases |
-| `assets/vitest.config.ts` | `vitest.config.ts` | **100% thresholds on `src/domain/**`** — this is what gate 3 of the loop reads |
+| `assets/vitest.config.ts` | `vitest.config.ts` | **100% thresholds on `src/domain/**`** — this is what the loop's coverage gate reads |
 | `assets/vite.config.ts` | `vite.config.ts` | same aliases, ES2022 |
 | `assets/cucumber.mjs` | `cucumber.mjs` | `strict: true` so undefined steps fail rather than pass silently |
-| `assets/package-scripts.json` | merge into `package.json` | `"type": "module"` and the six scripts |
+| `assets/tsconfig.map.json` | `tsconfig.map.json` | emits the domain's declarations — the input of `yarn craft:map` |
+| `assets/craft-verify.mjs` | `scripts/craft-verify.mjs` | the loop's gate runner: a digest, not a transcript |
+| `assets/craft-map.mjs` | `scripts/craft-map.mjs` | regenerates `.craft/api-map.d.ts` |
+| `assets/package-scripts.json` | merge into `package.json` | `"type": "module"` and the eight scripts |
 
 The scripts to merge:
 
@@ -73,8 +77,28 @@ The scripts to merge:
 "test:acceptance": "NODE_OPTIONS='--import tsx' cucumber-js",
 "coverage": "vitest run --coverage",
 "typecheck": "tsc --noEmit",
-"build": "vite build"
+"build": "vite build",
+"craft:verify": "node scripts/craft-verify.mjs",
+"craft:map": "tsc -p tsconfig.map.json && node scripts/craft-map.mjs"
 ```
+
+The last two exist for the loop, and both are there to keep agent context small.
+
+`craft:verify` runs the three gates and prints one line per gate when they pass,
+the tail of the output when one fails. The four raw commands print the name of
+every test file and a coverage table over the whole project — several thousand
+tokens landing in an agent's context on every attempt. It also runs the unit suite
+**once** for both the suite gate and the coverage gate, where `yarn test` followed
+by `yarn coverage` runs it twice.
+
+`craft:map` regenerates `.craft/api-map.d.ts`: every public signature of
+`src/domain`, no method bodies. It is what a fresh agent reads to learn what
+already exists. Without it the loop hands each agent the path of every file
+written so far, so iteration 20 costs twenty times iteration 1. It is emitted by
+`tsc` from the real code, so it cannot drift — which is why no agent ever writes
+it.
+
+Both scripts are plain Node with no dependency of their own.
 
 Merge into an existing `package.json` with `jq`, never by rewriting the file. The
 existing file goes **last** in the `*` merge so a script the project already
@@ -96,6 +120,7 @@ user can decide.
 mkdir -p src/domain/usecases src/infrastructure src/application
 mkdir -p tests/domain/usecases tests/application tests/fakes tests/builders
 mkdir -p features/steps/support/fakes
+mkdir -p scripts
 ```
 
 ```
@@ -127,7 +152,11 @@ duplicated on purpose. `features/**` never imports from `tests/**`, and the reve
 node_modules/
 coverage/
 dist/
+.craft/
 ```
+
+`.craft/` holds the generated API map. It is regenerated from the code at every
+commit of the loop, so committing it would only add conflicts.
 
 ## 6. Verify
 
@@ -136,6 +165,16 @@ yarn typecheck
 yarn test         # "no test files found" is the expected result on an empty project
 yarn coverage
 ```
+
+The two loop scripts are **not** run here, and neither is a failure at this stage:
+
+- `yarn craft:verify` needs at least one test and one scenario — on an empty
+  project vitest and cucumber both exit non-zero on finding nothing.
+- `yarn craft:map` needs a `src/domain` that compiles, and this skill deliberately
+  leaves `src/` empty.
+
+The loop runs both from its first iteration onwards, and its agents treat a missing
+map as "nothing exists yet".
 
 Report the final state and point the user at the `craft` skill to start the loop.
 

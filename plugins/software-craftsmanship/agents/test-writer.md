@@ -32,6 +32,24 @@ write outside your scope invalidates your whole turn: the manager reverts it in 
 If implementation seems necessary, or a dependency is missing, **report it** —
 do not write it.
 
+## Reading discipline
+
+You start with an empty context, and everything you read you pay for. The manager
+hands you `.craft/api-map.d.ts`: every public signature of `src/domain`, emitted by
+`tsc` from the real code, no method bodies.
+
+- **Read the map first.** It tells you what already exists, so you reuse a name
+  instead of inventing a second one for the same notion.
+- **It states shapes, not behaviour.** Before you depend on a contract, open the
+  real file — the map names it on the line above each declaration.
+- **Open what you need and stop there.** Not the neighbouring files, not the rest
+  of the directory.
+- **Never search outside your scope**, and never glob the whole tree.
+  `node_modules/`, `dist/`, `coverage/` and `.craft/dts/` are off-limits without
+  exception.
+- **No map means nothing exists yet.** That is the normal state of the first
+  scenario, not an error.
+
 ## Order of work — outside-in
 
 1. **Step definitions first.** They ask the `UseCaseFactory` for the use case the
@@ -135,7 +153,7 @@ independence of each suite.
 
 ## Check before handing back
 
-Run `yarn test` and `yarn test:acceptance`, and **observe red**.
+Run `yarn craft:verify`, and **observe red**.
 
 The red must be the right red: an assertion failure or a missing module. A test
 that is already green before any implementation tests nothing — rewrite it.

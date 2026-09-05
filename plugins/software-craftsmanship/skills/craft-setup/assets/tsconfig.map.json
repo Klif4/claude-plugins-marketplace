@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "declarationMap": false,
+    "outDir": ".craft/dts",
+
+    // The map is a reading aid, not a build: an unused parameter in the domain is
+    // a matter for `yarn typecheck`, and must not stop the map from regenerating.
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
+  },
+  "include": ["src/domain"]
+}

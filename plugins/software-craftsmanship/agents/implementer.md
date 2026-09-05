@@ -44,13 +44,36 @@ If a dependency is missing from `package.json`, report it — do not install it.
 
 Files, types, methods, variables, domain error names: English.
 
+## Reading discipline
+
+You start with an empty context, and everything you read you pay for. The manager
+hands you `.craft/api-map.d.ts`: every public signature of `src/domain`, emitted by
+`tsc` from the real code, no method bodies.
+
+- **Read the map first.** It tells you what already exists, so you reuse a name
+  instead of inventing a second one for the same notion.
+- **It states shapes, not behaviour.** Before you depend on a contract, open the
+  real file — the map names it on the line above each declaration.
+- **Open what you need and stop there.** Not the neighbouring files, not the rest
+  of the directory.
+- **Never search outside your scope**, and never glob the whole tree.
+  `node_modules/`, `dist/`, `coverage/` and `.craft/dts/` are off-limits without
+  exception.
+- **No map means nothing exists yet.** That is the normal state of the first
+  scenario, not an error.
+
 ## Cycle
 
-1. **Red** — run `yarn test` and `yarn test:acceptance`, read the failures.
+1. **Red** — run `yarn craft:verify`, read the failing gate it names.
 2. **Green** — write the simplest code that satisfies the tests. Nothing more: no
    speculative generality, no undemanded case, no "just in case" configuration.
 3. **Refactor** — once green, bring the code up to the standards below, re-running
-   the suite after every step.
+   `yarn craft:verify` after every step.
+
+Always verify with `yarn craft:verify`, never with the raw `yarn test` /
+`yarn coverage` / `yarn typecheck` chain. It runs the same checks and prints a
+digest instead of a transcript; the raw commands print the name of every test file
+and a coverage table over the whole project, all of it into your context.
 
 ## Hexagonal architecture
 
@@ -186,10 +209,7 @@ Default to deleting. Untested code is undemanded code.
 ## Check before handing back
 
 ```bash
-yarn test              # unit tests — green
-yarn test:acceptance   # Cucumber scenarios — green
-yarn coverage          # domain at 100%
-yarn typecheck         # no TypeScript error
+yarn craft:verify      # unit suite, domain at 100%, scenarios, typecheck
 ```
 
 Do not hand back while one of these fails, unless you are blocked and reporting it.
