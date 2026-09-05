@@ -1,6 +1,6 @@
 ---
 name: craft-review
-description: This skill should be used when the user asks to "review this for craft", "craft audit", "audit my domain", "check craft conventions", "is this code idiomatic craft", "find primitive obsession", "find code that throws", "check for mutations", "are these tests coupled to the implementation", or wants existing TypeScript audited against software craftsmanship rules. It reports violations of immutability, no-throw, primitive obsession, tell-don't-ask, hexagonal layering and behaviour-based testing, ranked by cost to fix later.
+description: This skill should be used when the user asks to "review this for craft", "craft audit", "audit my domain", "check craft conventions", "is this code idiomatic craft", "find primitive obsession", "find code that throws", "check for mutations", "are these tests coupled to the implementation", or wants existing TypeScript audited against software craftsmanship rules. It reports violations of immutability, no-throw, primitive obsession, tell-don't-ask, hexagonal layering, native Date usage instead of js-joda, use cases misplaced outside the domain or built without the UseCaseFactory, and implementation-coupled tests, ranked by cost to fix later.
 argument-hint: "[path, or nothing to review the current diff]"
 allowed-tools: Read, Grep, Glob, Bash
 ---
@@ -27,7 +27,7 @@ TARGET=$(git diff --name-only HEAD -- '*.ts' \
 `grep -r` accepts a directory or a list of files indifferently, so the same
 commands serve both cases. Where a command below narrows to a layer
 (`src/domain`, `tests`), intersect that layer with `$TARGET` rather than replacing
-it — reviewing `src/application/PlaceOrder.ts` must not silently audit the whole
+it — reviewing `src/domain/usecases/PlaceOrder.ts` must not silently audit the whole
 project.
 
 ## Method
@@ -43,21 +43,34 @@ when the target is the whole project; narrow them to `$TARGET` otherwise. Add
 `2>/dev/null` where a layer may not exist.
 
 ```bash
-# Exceptions in domain and application
-grep -rnE '\bthrow\b|\btry\s*\{' src/domain src/application
+# Exceptions in the domain
+grep -rnE '\bthrow\b|\btry\s*\{' src/domain
 
 # Mutation and imperative style
-grep -rnE '\blet\b|\bfor\s*\(|\bwhile\s*\(|\.push\(|\.pop\(|\.splice\(|\.sort\(' src/domain src/application
+grep -rnE '\blet\b|\bfor\s*\(|\bwhile\s*\(|\.push\(|\.pop\(|\.splice\(|\.sort\(' src/domain
 
 # Native iterables where immutable is required
-grep -rnE ':\s*[A-Za-z<>]+\[\]|\bArray<|\bnew Map\(|\bnew Set\(|Object\.keys\(' src/domain src/application
+grep -rnE ':\s*[A-Za-z<>]+\[\]|\bArray<|\bnew Map\(|\bnew Set\(|Object\.keys\(' src/domain
 
 # Primitive obsession at domain boundaries
 grep -rnE '\((\w+): (string|number|boolean)|\): (string|number|boolean)\b' src/domain
 
+# Dates outside js-joda, and ambient "now"
+grep -rnE '\bnew Date\(|\bDate\.(now|parse|UTC)\(|getTime\(\)|\bmoment\b|dayjs|date-fns' src tests features
+grep -rnE '(LocalDate|LocalDateTime|ZonedDateTime|Instant|LocalTime)\.now\(\s*\)' src/domain
+grep -rn "@js-joda/timezone" src/domain
+
+# Use cases outside the domain
+ls src/application/usecases src/infrastructure/usecases 2>/dev/null
+
+# Use cases instantiated outside the factory
+ls src/domain/usecases 2>/dev/null | sed 's/\.ts$//' | while read -r usecase; do
+  grep -rn "new ${usecase}(" src tests features | grep -v 'src/domain/UseCaseFactory.ts'
+done
+
 # Dependency rule violations
-grep -rn "from '.*infrastructure" src/domain src/application
-grep -rn "from '.*application" src/domain
+grep -rn "from '.*infrastructure\|from '.*application" src/domain
+grep -rn "from '.*application" src/infrastructure
 
 # Cross-suite coupling
 grep -rn "from '.*tests/" features
@@ -88,9 +101,23 @@ Rank by what it costs to fix later, not by how many hits there are.
   into the domain. Every caller added meanwhile has to be revisited.
 - A port named after its technology (`StripeGateway`, `PostgresRepository` as an
   interface in `domain`) — the domain has learned about a vendor.
+- A use case sitting in `application` or `infrastructure` instead of
+  `src/domain/usecases/`: business orchestration outside the domain escapes the
+  100% gate, and the layer it landed in starts accumulating rules.
+- A use case instantiated with `new` outside the `UseCaseFactory` — in a
+  controller, a job, a step definition or a test. Every such caller re-decides the
+  dependency set, and they drift apart one commit at a time.
+- A concrete adapter named outside `src/application/`: the composition root has
+  leaked, and swapping an implementation now means editing several files.
 
 **2. Behavioural — silent bugs**
-- `throw` in `domain` or `application`: a failure path invisible in the signature.
+- `throw` in `domain`: a failure path invisible in the signature.
+- A native `Date`, a `Date.now()` or an epoch `number` where a business date
+  belongs: report the js-joda type it should be (`LocalDate` for a calendar day,
+  `Instant` for a point in time, `Duration`/`Period` for an elapsed amount).
+- `LocalDate.now()` / `Instant.now()` with no clock in `src/domain/**`: the rule
+  reads ambient state, so its boundary cannot be tested and the suite depends on
+  the day it runs. It should take the `Clock` port.
 - Mutation of a value object or an aggregate: aliasing bugs that surface far from
   the cause.
 - Tell-don't-ask violations: a rule duplicated across callers because the object
@@ -104,6 +131,9 @@ Rank by what it costs to fix later, not by how many hits there are.
 - `.skip` / `.todo` / `.only` left behind: `.only` silently shrinks the suite.
 - Placeholder data (`foo`, `test`, `123`): a test whose values say nothing about
   the rule.
+- A test that reads the real clock, or computes an expected date from the current
+  one: it passes today and fails on a boundary day. It should use a fixed clock and
+  a literal date.
 
 **4. Style — cheap to fix, fix in passing**
 - `let`, imperative loops, native arrays where `immutable` is required.

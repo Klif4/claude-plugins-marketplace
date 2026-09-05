@@ -47,7 +47,7 @@ coverage: {
   provider: 'v8',
   reporter: ['text', 'json-summary'],
   include: ['src/**/*.ts'],
-  exclude: ['src/**/index.ts', 'src/infrastructure/**'],
+  exclude: ['src/**/index.ts', 'src/infrastructure/**', 'src/application/**'],
   thresholds: {
     '**/src/domain/**': { lines: 100, branches: 100, functions: 100, statements: 100 },
   },
@@ -55,7 +55,9 @@ coverage: {
 ```
 
 `yarn coverage` exits non-zero when the threshold is missed, so its exit code is
-the verdict — no parsing needed. To find out *which* files fall short:
+the verdict — no parsing needed. `yarn craft:verify` wraps it (see below) and
+already prints the shortfall; the query below is for when you want it on its own.
+To find out *which* files fall short:
 
 ```bash
 jq -r '
@@ -66,9 +68,46 @@ jq -r '
 ' coverage/coverage-summary.json
 ```
 
-`src/infrastructure/**` is excluded on purpose: adapters are covered by their own
-integration tests, not by the domain gate, and holding them to 100% pushes people
-towards mocking the library they are adapting.
+`src/infrastructure/**` and `src/application/**` are excluded on purpose: adapters
+are covered by their own integration tests, and the composition root is wiring.
+Holding either to 100% pushes people towards mocking the library they are adapting,
+or towards testing that a constructor was called.
+
+The gate covers `src/domain/**`, which now includes `src/domain/usecases/**` and
+`src/domain/UseCaseFactory.ts` — that is deliberate: a use case is business
+behaviour and every branch of it must be demanded by a test.
+
+## The two loop scripts
+
+`craft-setup` installs two scripts that exist for the `craft` loop, and that are
+just as usable by hand:
+
+| Script | What it does |
+|---|---|
+| `yarn craft:verify` | unit suite, domain coverage, acceptance scenarios and `tsc`, in one run — one line per gate when green, the tail of the output plus the coverage shortfall when red |
+| `yarn craft:map` | regenerates `.craft/api-map.d.ts`: every public signature of `src/domain`, no method bodies, emitted by `tsc` |
+
+Both exist to keep an agent's context small. A fresh agent has to be told what
+already exists, and the map says it in ~1 line per export instead of forty files;
+`craft:verify` says a suite is red in a handful of lines instead of a transcript.
+`craft:verify` also runs the unit suite **once** for both the suite gate and the
+coverage gate, where `yarn test` then `yarn coverage` runs it twice.
+
+The map is `tsc` output, so it cannot drift from the code — which is why nothing
+ever edits it by hand, and why `.craft/` is gitignored.
+
+## Dates
+
+`@js-joda/core` is a runtime dependency, imported by the domain like `immutable`
+and `neverthrow`. It needs no configuration.
+
+`@js-joda/timezone` is added only when the domain reasons about a named zone. It
+registers its data as a side effect, so import it once at the composition root
+(`src/application/`) and never from `src/domain/**`:
+
+```ts
+import '@js-joda/timezone'
+```
 
 ## Cucumber with TypeScript under ESM
 

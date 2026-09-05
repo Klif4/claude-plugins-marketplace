@@ -109,6 +109,29 @@ export class InMemoryOrderRepository implements OrderRepository {
 }
 ```
 
+**A fixed clock** wherever the code asks the `Clock` port for the current instant.
+A test that reads the real clock passes on Tuesday and fails on the first of the
+month.
+
+```ts
+// tests/fakes/FixedClock.ts
+export class FixedClock implements Clock {
+  private constructor(private readonly instant: Instant) {}
+
+  static at(isoInstant: string): FixedClock {
+    return new FixedClock(Instant.parse(isoInstant))
+  }
+
+  now(): Instant {
+    return this.instant
+  }
+}
+```
+
+Pick the instant so the boundary is visible in the test itself — the day before
+the deadline, the exact minute a window closes — and write real dates:
+`LocalDate.parse('2026-03-12')`, never a date computed from `now`.
+
 **`mock<Port>()` from `vitest-mock-extended`** for a stateless port where the point
 is that a command was sent.
 
@@ -123,6 +146,29 @@ expect(notifier.notifyOrderPlaced).toHaveBeenCalledWith(expectedConfirmation)
 Never mock an entity, a value object, an aggregate or a pure function. Those are
 instantiated for real, with real values — mocking them means asserting against a
 fiction.
+
+## Building a use case under test
+
+A use case is domain code, so it is unit-tested like the rest of the domain — and
+it is built the way the application builds it: through the `UseCaseFactory`, with
+fakes and mocks in place of the adapters.
+
+```ts
+const orders = new InMemoryOrderRepository()
+const notifier = mock<CustomerNotifier>()
+const useCases = new UseCaseFactory(orders, notifier, FixedClock.at('2026-03-12T09:00:00Z'))
+
+it('refuses an order below the minimum amount', async () => {
+  const outcome = await useCases.placeOrder().execute(aPlaceOrderCommand().worth(Money.euros(24.99)).build())
+
+  expect(outcome).toStrictEqual(err(new BelowMinimumAmount(Money.euros(25))))
+})
+```
+
+Calling `new PlaceOrder(...)` directly in a test is a smell twice over: it leaves
+the factory — domain code, under the 100% gate — uncovered, and it lets the test
+pass a dependency set the running app never assembles. The factory is cheap to
+build; build it.
 
 ## Asserting on `Result`
 
@@ -145,9 +191,21 @@ in a test discards the failure case the assertion was supposed to pin down.
 
 ## Step definitions
 
-Steps drive the use case through its **primary port**, with in-memory adapters from
-`features/steps/support/fakes/` on the secondary side. No HTTP, no database, no
-browser — a scenario runs in milliseconds, like a unit test.
+Steps ask the `UseCaseFactory` for the use case the scenario exercises, with
+in-memory adapters from `features/steps/support/fakes/` on the secondary side. No
+HTTP, no database, no browser — a scenario runs in milliseconds, like a unit test.
+
+The world builds the factory once, with a clock fixed at the date the scenario
+talks about:
+
+```ts
+// features/steps/support/world.ts
+Before(function () {
+  this.orders = new InMemoryOrderRepository()
+  this.notifier = new RecordingCustomerNotifier()
+  this.useCases = new UseCaseFactory(this.orders, this.notifier, FixedClock.at('2026-03-12T09:00:00Z'))
+})
+```
 
 ```ts
 Given('{customer} has a basket worth {money}', function (customer, amount) {
@@ -155,7 +213,7 @@ Given('{customer} has a basket worth {money}', function (customer, amount) {
 })
 
 When('she checks out', function () {
-  this.outcome = this.checkout.execute(new CheckoutCommand(this.basket))
+  this.outcome = this.useCases.placeOrder().execute(new PlaceOrderCommand(this.basket))
 })
 
 Then('checkout is refused because the order is below the minimum amount', function () {

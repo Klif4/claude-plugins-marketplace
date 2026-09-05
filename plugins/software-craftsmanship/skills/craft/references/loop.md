@@ -22,7 +22,7 @@ paths the agent was allowed to touch, and whatever remains is a violation.
 
 Checking only the directories an agent must *not* touch is not enough. An
 implementer that edits `vitest.config.ts` to relax the coverage thresholds passes
-gate 3 undetected; one that removes `strict: true` from `cucumber.mjs` makes
+the coverage gate undetected; one that removes `strict: true` from `cucumber.mjs` makes
 undefined steps pass silently. The allow-list catches both, and everything else
 nobody thought of.
 
@@ -68,8 +68,12 @@ git diff --cached --name-only -- tests features
 
 ```bash
 yarn test:acceptance --name "<exact scenario title>"   # must fail
-yarn test                                              # must fail
+yarn craft:verify                                      # must fail
 ```
+
+`craft:verify` stops at the first red gate and prints only the tail of its output.
+That is enough here: one red gate proves the suite is red, and the full transcript
+of a failing suite is several thousand tokens nobody reads.
 
 A scenario that is already green here means the step definitions assert nothing, or
 assert something already true. Relaunch a fresh `test-writer` with that fact,
@@ -102,35 +106,52 @@ not negotiable.
 ## Phase 3g — the three gates
 
 ```bash
-yarn test:acceptance --name "<exact scenario title>"   # gate 1
-yarn test                                              # gate 2 — whole suite
-yarn coverage                                          # gate 3 — thresholds fail the run
+yarn craft:verify
 ```
 
-Gate 3 relies on the per-glob thresholds set in `vitest.config.ts`
-(`src/domain/**` at 100% for lines, branches, functions and statements), so the
-exit code is the verdict. To report *which* files fall short:
+One command, three gates, and its exit code is the verdict:
 
-```bash
-jq -r '
-  to_entries[]
-  | select(.key | test("src/domain/"))
-  | select([.value.lines.pct, .value.branches.pct, .value.functions.pct, .value.statements.pct] | min < 100)
-  | "\(.key)  lines=\(.value.lines.pct)% branches=\(.value.branches.pct)%"
-' coverage/coverage-summary.json
-```
+| Gate | What `craft:verify` runs |
+|---|---|
+| The whole unit suite is green | `vitest run --coverage --reporter=dot` |
+| Domain coverage is 100% | the thresholds in `vitest.config.ts` fail that same run |
+| Every scenario is green | `cucumber-js` over the whole feature set |
+| *(plus)* the project typechecks | `tsc --noEmit` |
+
+The suite gate and the coverage gate are deliberately **one run**: `yarn test`
+followed by `yarn coverage` executes the unit suite twice for the same verdict.
+
+Running the whole acceptance suite rather than `--name "<title>"` costs one command
+and catches the scenario that this iteration broke. The named form stays useful at
+3d, where only the new scenario matters.
+
+On failure the script prints the tail of the failing gate and, for coverage, the
+domain files short of 100% with their percentages — read straight from
+`coverage/coverage-summary.json`, not from the coverage table, which lists every
+file whether it is short or not.
+
+Never replace this by the raw four commands to "see more". Their full output is
+several thousand tokens, it lands in the agent context on every relaunch, and the
+digest already names the failing gate.
 
 ## Phase 3h — mapping a failure to a role
 
+`craft:verify` names the failing gate on its `FAIL` line; map that to a role:
+
 | Symptom | Role to relaunch | What to inject |
 |---|---|---|
-| Gate 1 red, gate 2 green | `implementer` | the Cucumber output, the scenario title |
-| Gate 2 red on the new tests | `implementer` | the failing Vitest output |
-| Gate 2 red on a **previously passing** test | `implementer` | the regression output, flagged as a regression |
-| Gate 3 short, uncovered lines are dead code | `implementer` | the uncovered file:line list, instruction to delete |
-| Gate 3 short, uncovered lines are legitimate behaviour | `test-writer` | the uncovered file:line list, the scenario |
-| Typecheck red, `src` only | `implementer` | the `tsc` output |
-| Typecheck red, `tests` only | `test-writer` | the `tsc` output |
+| `acceptance scenarios` red, unit green | `implementer` | the Cucumber tail, the scenario title |
+| `unit suite` red on the new tests | `implementer` | the Vitest tail |
+| `unit suite` red on a **previously passing** test | `implementer` | the tail, flagged as a regression |
+| Coverage short, uncovered lines are dead code | `implementer` | the shortfall list, instruction to delete |
+| Coverage short, uncovered lines are legitimate behaviour | `test-writer` | the shortfall list, the scenario |
+| `typecheck` red, `src` only | `implementer` | the `tsc` tail |
+| `typecheck` red, `tests` only | `test-writer` | the `tsc` tail |
+
+Inject the tail the script printed, not a re-run with a verbose reporter. If the
+digest genuinely is not enough to place the failure, run the one raw command for
+that gate **in this session** and inject only the relevant lines — never hand a
+full transcript to an agent.
 
 Read the uncovered lines before deciding between the last two rows. A guard clause
 no scenario requires is dead code and gets deleted; a business branch the scenario
@@ -144,12 +165,26 @@ stale mental model of what it wrote earlier.
 Three attempts maximum per scenario. Beyond that, the problem is upstream — the
 scenario is ambiguous, or the tests over-specify — and it is the user's call.
 
-## Phase 3i — commit
+## Phase 3i — regenerate the map, then commit
 
 ```bash
+yarn craft:map
 git add -A
 git commit -m "feat(<domain>): <scenario title>"
 ```
+
+`craft:map` rewrites `.craft/api-map.d.ts` from the code that just went green: the
+public signatures of `src/domain`, no method bodies. It is the only thing the next
+iteration's agents receive about the code already written, so it has to be
+regenerated **here** — before the next `test-writer` starts, and only once the
+domain compiles, which the gates just proved.
+
+It is `tsc` output, so it cannot drift from the code. No agent ever writes it, and
+`.craft/` is gitignored: `git add -A` will not pick it up.
+
+If `craft:map` fails while the gates passed, the cause is `tsconfig.map.json`, not
+the domain — report it and keep going; a missing map degrades the next iteration,
+it does not break it.
 
 One scenario, one commit. The history then reads as the list of business behaviours
 delivered, and any commit can be reverted without breaking another scenario.
