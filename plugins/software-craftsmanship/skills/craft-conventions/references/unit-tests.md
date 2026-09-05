@@ -218,6 +218,12 @@ Steps ask the `UseCaseFactory` for the use case the scenario exercises, with
 in-memory adapters from `features/steps/support/fakes/` on the secondary side. No
 HTTP, no database, no browser — a scenario runs in milliseconds, like a unit test.
 
+Assertions come from `import { expect } from 'vitest'`, explicitly. Vitest's
+`globals: true` only exists inside a Vitest run: under cucumber a bare `expect` is
+a `ReferenceError`, and `yarn typecheck` will not say so because `vitest/globals`
+types it. The same `expect` is what makes `toStrictEqual` exact on `immutable`
+values and on `Result`s.
+
 The world builds the factory once, with a clock fixed at the date the scenario
 talks about:
 
@@ -231,6 +237,9 @@ Before(function () {
 ```
 
 ```ts
+import { Given, When, Then } from '@cucumber/cucumber'
+import { expect } from 'vitest'
+
 Given('{customer} has a basket worth {money}', function (customer, amount) {
   this.basket = BasketBuilder.aBasket().worth(amount).for(customer).build()
 })

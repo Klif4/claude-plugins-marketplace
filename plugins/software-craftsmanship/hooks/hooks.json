@@ -1,0 +1,17 @@
+{
+  "description": "Scope guards for the craft agents: refuse a write outside the agent's allow-list, and git or dependency installs from the test-writer and implementer. No-op for every other agent and for the main session.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/scripts/craft-guard.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

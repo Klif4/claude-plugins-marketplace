@@ -63,7 +63,9 @@ Puis :
 │   └── software-craftsmanship/
 │       ├── .claude-plugin/plugin.json
 │       ├── skills/           # craft, craft-setup, craft-conventions, craft-review
-│       └── agents/           # bdd-writer, test-writer, implementer
+│       ├── agents/           # bdd-writer, test-writer, implementer
+│       ├── hooks/hooks.json  # garde PreToolUse dispatchée sur agent_type
+│       └── scripts/          # craft-guard.sh
 └── scripts/validate.sh
 ```
 

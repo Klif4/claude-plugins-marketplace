@@ -27,7 +27,7 @@
     {
       "name": "software-craftsmanship",
       "source": "./plugins/software-craftsmanship",
-      "description": "BDD to tests to implementation, one Gherkin scenario at a time, driven by three agents that never share context. TypeScript, Vite, Vitest, Cucumber, Immutable, neverthrow, hexagonal architecture.",
+      "description": "BDD to tests to implementation, one Gherkin scenario at a time, driven by three agents that never share context. TypeScript, Vitest, Cucumber, Immutable, neverthrow, js-joda, hexagonal architecture with use cases in the domain.",
       "version": "0.1.0",
       "author": {
         "name": "klif"

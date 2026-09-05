@@ -3,7 +3,7 @@
 BDD → tests → implementation, one Gherkin scenario at a time, driven by three
 agents that **never share context**.
 
-TypeScript · Vite · Vitest · Cucumber · Immutable · neverthrow · js-joda · vitest-mock-extended
+TypeScript · Vitest · Cucumber · Immutable · neverthrow · js-joda · vitest-mock-extended
 
 ## Why three isolated agents
 
@@ -45,13 +45,26 @@ which prints a digest rather than a full test transcript.
 
 ## Boundaries are enforced, not requested
 
-Each agent's scope is stated in its prompt — and checked in git after it runs.
-Hooks cannot do this: a `PreToolUse` hook sees the tool call, not which agent made
-it, so it cannot tell a legitimate `tests/` write from an illegitimate one.
+Each agent's scope is stated in its prompt, refused by a hook before a write lands,
+and checked in git after the agent runs.
 
-Git can. The manager snapshots the tree, runs the agent, diffs, and reverts
-whatever landed outside the agent's scope. Deterministic, no loop-state file, and
-no friction when you work by hand outside the loop.
+**The hook.** The plugin registers one `PreToolUse` hook, `scripts/craft-guard.sh`.
+A hook that fires inside a subagent receives the agent's name as `agent_type`, so
+the script dispatches on it and is a no-op for anything that is not a craft agent.
+For the three that are, it sees the path of every `Write` and `Edit` and exits 2
+outside the agent's allow-list: `features/` for the bdd-writer, `tests/` and
+`features/steps/` for the test-writer, `src/` for the implementer. For the two
+agents holding `Bash` it also refuses any `git` command and any dependency
+install — the git index is the manager's, and `package.json` is the user's. A
+refusal lands in the agent's context, so it reports the need instead of burning a
+turn on a write that would be reverted anyway. (Claude Code ignores `hooks` in a
+plugin agent's frontmatter; that is why the guard lives at plugin level.)
+
+**Git.** A hook on `Write` never sees a heredoc or a `sed -i`, so the manager
+still snapshots the tree, runs the agent, diffs, and reverts whatever landed
+outside the agent's scope. Deterministic, no loop-state file, and no friction when
+you work by hand outside the loop. Anything that reaches this check went around
+the hook, and the closing report says so.
 
 ## Two gates, two rhythms
 
@@ -113,6 +126,8 @@ too — `src/application/` and `src/infrastructure/` are not.
 | `agents/bdd-writer.md` | Writes `.feature` files. Nothing else. |
 | `agents/test-writer.md` | Writes `tests/**` and `features/steps/**`. Never `src/`. |
 | `agents/implementer.md` | Writes `src/**`. Never touches a test. |
+| `hooks/hooks.json` | Registers the `PreToolUse` guard below |
+| `scripts/craft-guard.sh` | Dispatches on `agent_type`: refuses a `Write`/`Edit` outside the agent's allow-list, and `git` or dependency installs from the test-writer and implementer |
 
 ## Usage
 
@@ -150,7 +165,8 @@ tests/fakes/                  in-memory adapters and clocks — unit suite only
 tests/builders/               object mothers
 
 features/*.feature            Gherkin, English, business intent only
-features/steps/*.steps.ts     step definitions driving the primary ports
+features/steps/*.steps.ts     step definitions driving the primary ports,
+                              asserting with `expect` imported from vitest
 features/steps/support/fakes/ in-memory adapters — acceptance suite only
 ```
 

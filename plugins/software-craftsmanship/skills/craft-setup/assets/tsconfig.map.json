@@ -5,6 +5,7 @@
     "declaration": true,
     "emitDeclarationOnly": true,
     "declarationMap": false,
+    "rootDir": "./src/domain",
     "outDir": ".craft/dts",
 
     // The map is a reading aid, not a build: an unused parameter in the domain is

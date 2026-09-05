@@ -10,10 +10,9 @@ The package manager is **yarn**. Never npm.
 "test:acceptance": "cucumber-js",
 "coverage": "vitest run --coverage",
 "typecheck": "tsc --noEmit",
-"build": "vite build",
 "craft:verify": "node scripts/craft-verify.mjs",
 "craft:verify:fast": "node scripts/craft-verify.mjs --fast",
-"craft:map": "tsc -p tsconfig.map.json && node scripts/craft-map.mjs"
+"craft:map": "node scripts/craft-map.mjs"
 ```
 
 ## Running one scenario
@@ -22,11 +21,13 @@ The package manager is **yarn**. Never npm.
 yarn test:acceptance --name "An order just below the minimum is refused"
 ```
 
-`--name` is a **regex**, not a literal: a title containing `.`, `(` or `?` matches
-more than you think, and a `Scenario Outline` title is matched after its
+`--name` is a **regex**, not a literal, and it is not anchored: a title containing
+`.`, `(` or `?` matches more than you think, "An order is refused" also selects
+"An order is refused twice", and a `Scenario Outline` title is matched after its
 placeholders have been substituted with the row's values. `yarn craft:verify:fast`
-handles both — it escapes the title and turns `<placeholder>` into `.+` — so prefer
-it when you want one scenario plus its unit tests and a typecheck.
+handles all three — it escapes the title, anchors it with `^…$`, and turns
+`<placeholder>` into `.+` — so prefer it when you want one scenario plus its unit
+tests and a typecheck.
 
 `--name` matches the scenario title as a regular expression. Quote it, and use the
 title exactly as written in the `.feature` file. For a `Scenario Outline`, the
@@ -154,16 +155,34 @@ Three points, each of which a `NODE_OPTIONS`-based setup gets wrong:
 - **`strict: true`** matters for the craft loop: undefined and pending steps fail the
   run instead of passing silently, so a scenario is always unambiguously red or green.
 
+### Assertions in step definitions
+
+Cucumber ships no assertion library, and Vitest's `globals: true` only applies
+inside a Vitest run. Every step file therefore starts with:
+
+```ts
+import { expect } from 'vitest'
+```
+
+Vitest's `expect` works standalone under cucumber, and it is the one that compares
+`immutable` values and `Result`s structurally. Leaving the import out is a
+`ReferenceError` at runtime that `yarn typecheck` does not report — `vitest/globals`
+types the global whether or not it exists.
+
 ## Path aliases
 
-`@domain`, `@application` and `@infrastructure` are declared in three places and
-must stay in sync: `tsconfig.json` (`paths`), `vitest.config.ts` (`resolve.alias`)
-and `vite.config.ts` (`resolve.alias`). Cucumber resolves them through `tsx`, which
-reads `tsconfig.json`.
+`@domain`, `@application` and `@infrastructure` are declared in two places and
+must stay in sync: `tsconfig.json` (`paths`) and `vitest.config.ts`
+(`resolve.alias`). Cucumber resolves them through `tsx`, which reads
+`tsconfig.json`.
+
+The `paths` entries are **relative** (`"./src/domain/*"`) and there is no
+`baseUrl`: TypeScript 7 removed `baseUrl` and rejects a non-relative `paths`
+target with `TS5090`.
 
 **Only subpath imports are supported**: `@domain/Money` resolves everywhere,
 `@domain` bare does not. The two config styles differ — `tsconfig.json` maps
-`"@domain/*"` to `["src/domain/*"]`, while Vite and Vitest alias the bare key
+`"@domain/*"` to `["./src/domain/*"]`, while Vitest aliases the bare key
 `'@domain'` to the directory — and they agree only on the subpath form. Importing
-a barrel with `from '@domain'` resolves under Vite and Vitest and then fails
+a barrel with `from '@domain'` resolves under Vitest and then fails
 `yarn typecheck`. Import the module, not the directory.

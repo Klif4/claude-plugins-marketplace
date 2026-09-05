@@ -3,6 +3,7 @@ name: craft
 description: This skill should be used when the user asks to "craft this feature", "use the craft loop", "build this feature with BDD", "drive this scenario outside-in", "outside-in TDD", "one scenario at a time", "implement this feature TDD", "write the Gherkin then the tests then the code", or names the bdd-writer / test-writer / implementer agents. It orchestrates one Gherkin scenario at a time through three context-isolated agents, gates every scenario on its acceptance and unit tests, and gates every feature file on the full suite and 100% domain coverage.
 argument-hint: "[business need, or path to a .feature file]"
 allowed-tools: Read, Grep, Glob, Bash, TodoWrite, AskUserQuestion, Task, Agent
+disallowed-tools: Write, Edit, MultiEdit, NotebookEdit
 ---
 
 # Craft loop — BDD to implementation, one scenario at a time
@@ -21,8 +22,9 @@ cost is what makes late iterations crawl.
 Input: the business need the user described, or the path they gave — `$ARGUMENTS`
 when this skill is invoked as a slash command.
 
-The frontmatter withholds `Write` and `Edit` from this session on purpose: the rule
-below is enforced, not requested.
+The frontmatter's `disallowed-tools` removes `Write` and `Edit` from this session on
+purpose: the rule below is enforced, not requested. (`allowed-tools` only
+pre-approves; it removes nothing.)
 
 ## Absolute rules
 
@@ -133,8 +135,10 @@ The agent writes step definitions first, then the unit tests.
 
 **3c. Boundary check.** Only `tests/` and `features/steps/` may have changed —
 everything else, including `.feature` files and every config, must be untouched.
-Revert any violation, record it, and continue. Snapshot the test files into the git
-index: that snapshot is what protects them during the next phase.
+The plugin's `PreToolUse` hook refuses a `Write` or `Edit` outside the agent's
+scope before it lands, so a violation here means the agent went through the shell:
+revert it, record it, and continue. Snapshot the test files into the git index:
+that snapshot is what protects them during the next phase.
 
 **3d. Confirm red.** `yarn craft:verify:fast --scenario "<title>" <the tests/ paths
 from 3c>` — it must fail. Only this scenario and only the test files just written,
@@ -172,8 +176,10 @@ relaunch.
 
 **3h. Recovery.** On failure, relaunch a **fresh** agent of the role concerned with
 the failure output — never continue the previous one, and never fix the code
-yourself. Three attempts maximum per scenario, then stop and report to the user.
-`references/loop.md` maps each failure to its role.
+yourself. Before relaunching a `test-writer` after an implementer has run, stage
+`src/` (`git add -A -- src`), otherwise the next 3c check reads the implementer's
+work as a violation and reverts it. Three attempts maximum per scenario, then stop
+and report to the user. `references/loop.md` maps each failure to its role.
 
 **3i. Regenerate the map, then commit.** Run `yarn craft:map` — it rewrites
 `.craft/api-map.d.ts` from the code that just went green, and that file is all the

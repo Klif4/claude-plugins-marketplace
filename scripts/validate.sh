@@ -36,5 +36,15 @@ for hooks in plugins/*/hooks/hooks.json; do
   fi
 done
 
+# Validation structurelle complète (manifestes, skills, agents, hooks) quand la CLI est là.
+if command -v claude >/dev/null 2>&1; then
+  claude plugin validate . || fail=1
+  for src in "${sources[@]}"; do
+    claude plugin validate "$src" || fail=1
+  done
+else
+  echo "claude introuvable : validation limitée au JSON." >&2
+fi
+
 [[ $fail -eq 0 ]] && echo "Marketplace valide."
 exit $fail

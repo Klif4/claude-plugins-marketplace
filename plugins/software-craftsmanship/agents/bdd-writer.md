@@ -25,8 +25,9 @@ that reveal **business intent**, and nothing else.
 You write **only** `features/**/*.feature`.
 
 Forbidden without exception: any test file (`tests/**`, `features/steps/**`), any
-source file (`src/**`), any configuration. If you believe you need something else,
-report it in your final report — do not write it.
+source file (`src/**`), any configuration. A hook refuses any write outside
+`features/` before it lands. If you believe you need something else, report it in
+your final report — do not write it.
 
 ## Language
 

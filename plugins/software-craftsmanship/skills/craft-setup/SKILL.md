@@ -1,6 +1,6 @@
 ---
 name: craft-setup
-description: This skill should be used when the user asks to "set up the craft toolchain", "bootstrap a BDD TypeScript project", "add vitest and cucumber", "set up hexagonal architecture", "configure 100% domain coverage", or when the craft loop reports a missing dependency or script. It installs Vite, Vitest, Cucumber, Immutable, neverthrow, js-joda and vitest-mock-extended with yarn, and lays out the hexagonal directory structure with use cases in the domain.
+description: This skill should be used when the user asks to "set up the craft toolchain", "bootstrap a BDD TypeScript project", "add vitest and cucumber", "set up hexagonal architecture", "configure 100% domain coverage", or when the craft loop reports a missing dependency or script. It installs Vitest, Cucumber, Immutable, neverthrow, js-joda and vitest-mock-extended with yarn, and lays out the hexagonal directory structure with use cases in the domain.
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
@@ -17,7 +17,7 @@ divergence instead.
 
 ```bash
 cat package.json 2>/dev/null
-ls tsconfig.json vitest.config.ts vite.config.ts cucumber.mjs 2>/dev/null
+ls tsconfig.json vitest.config.ts cucumber.mjs tsconfig.map.json 2>/dev/null
 ls -d src tests features 2>/dev/null
 ```
 
@@ -47,7 +47,10 @@ yarn add -D typescript vite vitest @vitest/coverage-v8 \
 | `vitest` + `@vitest/coverage-v8` | unit tests and the 100% domain gate |
 | `@cucumber/cucumber` + `tsx` | executable Gherkin, TypeScript steps under ESM |
 | `vitest-mock-extended` | typed `mock<Port>()` for outgoing ports |
-| `vite` | build |
+| `vite` | Vitest's peer dependency, nothing more — no `vite.config.ts`, no `build` script |
+
+The loop produces a domain, not an artefact. Add a bundler configuration the day
+the project ships one, not before.
 
 Add `@js-joda/timezone` only if the domain reasons about named zones
 (`ZoneId.of('Europe/Paris')`); `@js-joda/core` alone covers UTC and fixed offsets.
@@ -60,14 +63,13 @@ Copy from `assets/`, adapting nothing unless the project already diverges
 
 | Asset | Destination | What matters in it |
 |---|---|---|
-| `assets/tsconfig.json` | `tsconfig.json` | `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `@domain`/`@application`/`@infrastructure` aliases |
+| `assets/tsconfig.json` | `tsconfig.json` | `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, relative `@domain`/`@application`/`@infrastructure` aliases and no `baseUrl` (TypeScript 7 removed it) |
 | `assets/vitest.config.ts` | `vitest.config.ts` | **100% thresholds on `src/domain/**`** — this is what the loop's coverage gate reads |
-| `assets/vite.config.ts` | `vite.config.ts` | same aliases, ES2022 |
 | `assets/cucumber.mjs` | `cucumber.mjs` | registers `tsx`'s ESM hooks itself, declares no `paths`, `strict: true` |
-| `assets/tsconfig.map.json` | `tsconfig.map.json` | emits the domain's declarations — the input of `yarn craft:map` |
+| `assets/tsconfig.map.json` | `tsconfig.map.json` | emits the domain's declarations with `rootDir` pinned to `src/domain` — the input of `yarn craft:map` |
 | `assets/craft-verify.mjs` | `scripts/craft-verify.mjs` | the loop's gate runner, in two modes: a digest, not a transcript |
-| `assets/craft-map.mjs` | `scripts/craft-map.mjs` | regenerates `.craft/api-map.d.ts` |
-| `assets/package-scripts.json` | merge into `package.json` | `"type": "module"` and the nine scripts |
+| `assets/craft-map.mjs` | `scripts/craft-map.mjs` | runs `tsc -p tsconfig.map.json` on a clean staging dir and assembles `.craft/api-map.d.ts` |
+| `assets/package-scripts.json` | merge into `package.json` | `"type": "module"` and the eight scripts |
 
 The scripts to merge:
 
@@ -77,10 +79,9 @@ The scripts to merge:
 "test:acceptance": "cucumber-js",
 "coverage": "vitest run --coverage",
 "typecheck": "tsc --noEmit",
-"build": "vite build",
 "craft:verify": "node scripts/craft-verify.mjs",
 "craft:verify:fast": "node scripts/craft-verify.mjs --fast",
-"craft:map": "tsc -p tsconfig.map.json && node scripts/craft-map.mjs"
+"craft:map": "node scripts/craft-map.mjs"
 ```
 
 `test:acceptance` is a bare `cucumber-js` with no `NODE_OPTIONS`: `cucumber.mjs`
@@ -114,7 +115,8 @@ twenty-scenario feature crawl.
 already exists. Without it the loop hands each agent the path of every file
 written so far, so iteration 20 costs twenty times iteration 1. It is emitted by
 `tsc` from the real code, so it cannot drift — which is why no agent ever writes
-it.
+it. The script owns the `tsc` run and wipes `.craft/dts` first, so a failed run
+never leaves declarations that a later run would fold into the map twice.
 
 Both scripts are plain Node with no dependency of their own.
 
@@ -183,6 +185,10 @@ yarn typecheck
 yarn test         # "no test files found" is the expected result on an empty project
 yarn coverage
 ```
+
+Step definitions will import their assertions explicitly
+(`import { expect } from 'vitest'`); the `test-writer` knows, and
+`references/tooling.md` in `craft-conventions` says why.
 
 The two loop scripts are **not** run here, and neither is a failure at this stage:
 

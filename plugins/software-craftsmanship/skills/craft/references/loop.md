@@ -24,17 +24,31 @@ Keep the agent granularity at the scenario. Handing a whole feature file to one
 instead of emergent, and a failing gate then names a diff spanning eight scenarios
 with no way to tell which one broke.
 
-## Why git is the enforcement mechanism
+## Two lines of enforcement: a hook, then git
 
 Agent scope is stated in each agent's prompt, but a prompt is a request, not a
-guarantee. Hooks cannot help here: a `PreToolUse` hook receives the tool call, not
-the identity of the agent making it, so it cannot tell a legitimate `tests/` write
-by the test-writer from an illegitimate one by the implementer.
+guarantee. Two mechanisms make it one.
 
-Git can. The working tree before an agent runs is a known state; the diff after it
-runs is exactly what that agent did. Reverting the out-of-scope part of that diff
-is deterministic, needs no loop-state file, and adds no friction when working by
-hand outside the loop.
+**The hook refuses the write before it happens.** The plugin registers one
+`PreToolUse` hook in `hooks/hooks.json` — `scripts/craft-guard.sh`. Every hook
+input carries `agent_type` when it fires inside a subagent, so the script
+dispatches on it: for the bdd-writer, the test-writer and the implementer it sees
+the `file_path` of every `Write` and `Edit` and exits 2 outside the agent's
+allow-list; for anyone else, including this session, it exits 0 at once. The
+refusal lands in the agent's context, so it stops instead of burning a turn on a
+write that would be reverted anyway. For the test-writer and the implementer the
+same hook refuses any `git` command and any dependency install from the shell: the
+index snapshot below is theirs to break otherwise. (Claude Code ignores `hooks`
+declared in a plugin agent's frontmatter, which is why the guard lives at plugin
+level and dispatches itself.)
+
+**Git catches what the hook cannot see.** An agent holding `Bash` can still write
+a file with a heredoc or `sed -i`, and no `Write` hook fires for that. So the
+working tree before an agent runs is a known state, the diff after it runs is
+exactly what that agent did, and reverting the out-of-scope part of that diff is
+deterministic, needs no loop-state file, and adds no friction when working by hand
+outside the loop. A violation that reaches this check is worth recording: it means
+the agent went around the hook.
 
 ## The allow-list principle
 
@@ -175,6 +189,19 @@ Every relaunch is a **new `Agent` call**. Never `SendMessage` a previous agent:
 a fresh context re-reads the current state of the files instead of reasoning from a
 stale mental model of what it wrote earlier.
 
+**Relaunching a `test-writer` after the implementer has run** — the typecheck-red-
+on-tests row, or a coverage row at the full gate before its fix is committed —
+needs one step first:
+
+```bash
+git add -A -- src
+```
+
+The index then holds both the test snapshot and the implementer's work. Without
+it, the 3c check that follows the relaunch lists every `src/` file the implementer
+touched as unstaged, reads it as a violation, and reverts the implementation. After
+the relaunch, run 3c again, then re-run the fast gate.
+
 Three attempts maximum per scenario. Beyond that, the problem is upstream — the
 scenario is ambiguous, or the tests over-specify — and it is the user's call.
 
@@ -208,7 +235,8 @@ It is `tsc` output, so it cannot drift from the code. No agent ever writes it, a
 
 If `craft:map` fails while the gates passed, the cause is `tsconfig.map.json`, not
 the domain — report it and keep going; a missing map degrades the next iteration,
-it does not break it.
+it does not break it. The script wipes its staging directory before every run, so a
+failed run never leaks stale declarations into the next map.
 
 One scenario, one commit. The history then reads as the list of business behaviours
 delivered, and any commit can be reverted without breaking another scenario.

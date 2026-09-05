@@ -27,7 +27,10 @@ const scenario = scenarioAt === -1 ? undefined : argv[scenarioAt + 1]
 const paths = argv.filter((arg, index) => !arg.startsWith('--') && index !== scenarioAt + 1)
 
 const run = (label, command, args) => {
-  const { stdout, stderr, status, error } = spawnSync(command, args, { encoding: 'utf8' })
+  const { stdout, stderr, status, error } = spawnSync(command, args, {
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+  })
 
   if (error) {
     console.log(`FAIL  ${label}`)
@@ -68,10 +71,12 @@ const reportCoverageShortfall = () => {
 }
 
 // `--name` is a regex matched against the pickle name, so the title has to be
-// escaped. An outline's placeholders are already substituted in that name, so
-// `<amount>` becomes the row's value: match anything there rather than the literal.
+// escaped and anchored: unanchored, "An order is refused" also selects "An order
+// is refused twice", and the gate then reports on a scenario nobody asked about.
+// An outline's placeholders are already substituted in that name, so `<amount>`
+// becomes the row's value: match anything there rather than the literal.
 const titlePattern = (title) =>
-  title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/<[^>]+>/g, '.+')
+  `^${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/<[^>]+>/g, '.+')}$`
 
 if (fast) {
   if (!scenario) {

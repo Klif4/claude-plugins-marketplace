@@ -83,7 +83,9 @@ ORDER
 2. Then the Vitest unit tests in tests/ that those steps make necessary.
 
 Build use cases through the UseCaseFactory, never with `new`. Every date comes from
-@js-joda/core, written as a literal — never computed from the current date.
+@js-joda/core, written as a literal — never computed from the current date. Step
+definitions assert with `import { expect } from 'vitest'` — nothing is global
+under cucumber.
 
 features/steps/ must not import anything from tests/. Each suite owns its fakes;
 duplication between the two is intended.
@@ -122,19 +124,10 @@ states shapes, not behaviour. Do not read further than that.
 
 CONSTRAINTS
 - Write only under src/. Never modify, delete, skip or weaken a test.
-- Hexagonal layering, dependency rule inward.
-- Total immutability; every iterable through `immutable` (List/Map/Set/Record).
-- No throw: `Result` / `ResultAsync` from neverthrow, named domain errors.
-- No primitive obsession: value objects with a validating static factory.
-- Tell, don't ask. No getter that exists only to let a caller decide.
-- Declarative chaining, no imperative loop, no `let`.
-- Use cases in src/domain/usecases/, built only by src/domain/UseCaseFactory.ts.
-  src/application/ names the concrete adapters and exposes the app.
-- Dates through @js-joda/core, never the native Date. "Now" comes from the Clock
-  port, never from LocalDate.now() / Instant.now().
 - src/domain/** must reach 100% coverage. An uncovered branch is code nobody asked
   for: delete it. If it is legitimate behaviour with no test, report it — do not
   add a test.
+The craft rules themselves are in your definition; they are not repeated here.
 
 Do not search wider than src/ and the test files listed above. Never glob `**/*`.
 

@@ -8,22 +8,31 @@
 //
 // It is emitted by `tsc`, so it is extracted from the code and cannot drift.
 // Never edit it by hand.
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 
 const DTS = '.craft/dts'
 const OUT = '.craft/api-map.d.ts'
+
+// The staging directory is wiped before tsc runs, not only after: a tsc run that
+// failed halfway leaves declarations behind, and a later successful run would then
+// merge two layouts into one map with duplicated entries.
+rmSync(DTS, { recursive: true, force: true })
+
+const tsc = spawnSync('tsc', ['-p', 'tsconfig.map.json'], { encoding: 'utf8', shell: process.platform === 'win32' })
+if (tsc.error || tsc.status !== 0) {
+  console.error(`${tsc.stdout ?? ''}${tsc.stderr ?? ''}`.trimEnd())
+  console.error(tsc.error ? `tsc could not be run: ${tsc.error.message}` : 'tsc -p tsconfig.map.json failed — the map was not regenerated.')
+  rmSync(DTS, { recursive: true, force: true })
+  process.exit(1)
+}
 
 const walk = (directory) =>
   readdirSync(directory).flatMap((entry) => {
     const path = join(directory, entry)
     return statSync(path).isDirectory() ? walk(path) : path.endsWith('.d.ts') ? [path] : []
   })
-
-if (!existsSync(DTS)) {
-  console.error(`${DTS} is missing — \`tsc -p tsconfig.map.json\` must run first.`)
-  process.exit(1)
-}
 
 const files = walk(DTS).sort()
 
