@@ -63,7 +63,7 @@ Copy from `assets/`, adapting nothing unless the project already diverges
 | `assets/tsconfig.json` | `tsconfig.json` | `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `@domain`/`@application`/`@infrastructure` aliases |
 | `assets/vitest.config.ts` | `vitest.config.ts` | **100% thresholds on `src/domain/**`** — this is what the loop's coverage gate reads |
 | `assets/vite.config.ts` | `vite.config.ts` | same aliases, ES2022 |
-| `assets/cucumber.mjs` | `cucumber.mjs` | `strict: true` so undefined steps fail rather than pass silently |
+| `assets/cucumber.mjs` | `cucumber.mjs` | registers `tsx`'s ESM hooks itself, declares no `paths`, `strict: true` |
 | `assets/tsconfig.map.json` | `tsconfig.map.json` | emits the domain's declarations — the input of `yarn craft:map` |
 | `assets/craft-verify.mjs` | `scripts/craft-verify.mjs` | the loop's gate runner: a digest, not a transcript |
 | `assets/craft-map.mjs` | `scripts/craft-map.mjs` | regenerates `.craft/api-map.d.ts` |
@@ -74,13 +74,21 @@ The scripts to merge:
 ```json
 "test": "vitest run",
 "test:watch": "vitest",
-"test:acceptance": "NODE_OPTIONS='--import tsx' cucumber-js",
+"test:acceptance": "cucumber-js",
 "coverage": "vitest run --coverage",
 "typecheck": "tsc --noEmit",
 "build": "vite build",
 "craft:verify": "node scripts/craft-verify.mjs",
 "craft:map": "tsc -p tsconfig.map.json && node scripts/craft-map.mjs"
 ```
+
+`test:acceptance` is a bare `cucumber-js` with no `NODE_OPTIONS`: `cucumber.mjs`
+calls `register()` from `tsx/esm/api` itself, so the TypeScript steps load whether
+the run comes from yarn, from `craft:verify`, or from an IDE gutter that invokes
+`cucumber-js` directly. That config also declares no `paths` — cucumber-js already
+defaults to `features/**/*.feature`, and a `paths` key would be merged with, not
+overridden by, the feature file an IDE passes on the command line, turning "run this
+one scenario" into a full-suite run.
 
 The last two exist for the loop, and both are there to keep agent context small.
 

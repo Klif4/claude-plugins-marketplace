@@ -52,7 +52,7 @@ if (!run('unit suite + domain coverage', 'vitest run --coverage --reporter=dot -
   process.exit(1)
 }
 
-if (!run('acceptance scenarios', "NODE_OPTIONS='--import tsx' cucumber-js")) process.exit(1)
+if (!run('acceptance scenarios', 'cucumber-js')) process.exit(1)
 if (!run('typecheck', 'tsc --noEmit')) process.exit(1)
 
 console.log('\nAll three gates green.')
