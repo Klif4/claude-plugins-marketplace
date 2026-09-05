@@ -24,6 +24,7 @@ Puis :
 | Plugin | Description |
 | --- | --- |
 | `hello-world` | Plugin d'exemple servant de gabarit. |
+| `software-craftsmanship` | Boucle BDD → tests → implémentation, trois agents cloisonnés. TypeScript, Vitest, Cucumber, Immutable. |
 
 ## Ajouter un plugin
 
@@ -51,14 +52,18 @@ Puis :
 ├── .claude-plugin/
 │   └── marketplace.json      # catalogue (obligatoire, à la racine)
 ├── plugins/
-│   └── hello-world/
-│       ├── .claude-plugin/
-│       │   └── plugin.json   # manifeste du plugin
-│       ├── skills/           # skills → /plugin:nom (dossier/SKILL.md)
-│       ├── agents/           # sous-agents (.md)
-│       ├── hooks/hooks.json  # hooks
-│       ├── scripts/          # scripts exécutables
-│       └── .mcp.json         # serveurs MCP
+│   ├── hello-world/
+│   │   ├── .claude-plugin/
+│   │   │   └── plugin.json   # manifeste du plugin
+│   │   ├── skills/           # skills → /plugin:nom (dossier/SKILL.md)
+│   │   ├── agents/           # sous-agents (.md)
+│   │   ├── hooks/hooks.json  # hooks
+│   │   ├── scripts/          # scripts exécutables
+│   │   └── .mcp.json         # serveurs MCP
+│   └── software-craftsmanship/
+│       ├── .claude-plugin/plugin.json
+│       ├── skills/           # craft, craft-setup, craft-conventions, craft-review
+│       └── agents/           # bdd-writer, test-writer, implementer
 └── scripts/validate.sh
 ```
 

@@ -1,0 +1,21 @@
+{
+  "name": "software-craftsmanship",
+  "description": "BDD to tests to implementation, one Gherkin scenario at a time, driven by three agents that never share context. TypeScript, Vite, Vitest, Cucumber, Immutable, neverthrow, hexagonal architecture.",
+  "version": "0.1.0",
+  "author": {
+    "name": "klif"
+  },
+  "homepage": "https://github.com/Klif4/claude-plugins-marketplace",
+  "license": "MIT",
+  "keywords": [
+    "bdd",
+    "tdd",
+    "craftsmanship",
+    "typescript",
+    "vitest",
+    "cucumber",
+    "gherkin",
+    "hexagonal",
+    "immutable"
+  ]
+}

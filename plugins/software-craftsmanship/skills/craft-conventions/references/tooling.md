@@ -1,0 +1,102 @@
+# Tooling
+
+The package manager is **yarn**. Never npm.
+
+## Scripts
+
+```json
+"test": "vitest run",
+"test:watch": "vitest",
+"test:acceptance": "NODE_OPTIONS='--import tsx' cucumber-js",
+"coverage": "vitest run --coverage",
+"typecheck": "tsc --noEmit",
+"build": "vite build"
+```
+
+## Running one scenario
+
+```bash
+yarn test:acceptance --name "An order just below the minimum is refused"
+```
+
+`--name` matches the scenario title as a regular expression. Quote it, and use the
+title exactly as written in the `.feature` file. For a `Scenario Outline`, the
+title matches every generated example.
+
+Other useful selections:
+
+```bash
+yarn test:acceptance features/checkout.feature          # one file
+yarn test:acceptance features/checkout.feature:14       # one scenario by line
+yarn test:acceptance --tags '@wip'                      # by tag
+```
+
+## Running one unit test file
+
+```bash
+yarn test tests/domain/Money.spec.ts
+yarn test -t 'refuses an order below the minimum amount'
+```
+
+## Coverage thresholds
+
+`vitest.config.ts` gates `src/domain/**` at 100%:
+
+```ts
+coverage: {
+  provider: 'v8',
+  reporter: ['text', 'json-summary'],
+  include: ['src/**/*.ts'],
+  exclude: ['src/**/index.ts', 'src/infrastructure/**'],
+  thresholds: {
+    '**/src/domain/**': { lines: 100, branches: 100, functions: 100, statements: 100 },
+  },
+}
+```
+
+`yarn coverage` exits non-zero when the threshold is missed, so its exit code is
+the verdict — no parsing needed. To find out *which* files fall short:
+
+```bash
+jq -r '
+  to_entries[]
+  | select(.key | test("src/domain/"))
+  | select([.value.lines.pct, .value.branches.pct, .value.functions.pct, .value.statements.pct] | min < 100)
+  | "\(.key)  lines=\(.value.lines.pct)% branches=\(.value.branches.pct)%"
+' coverage/coverage-summary.json
+```
+
+`src/infrastructure/**` is excluded on purpose: adapters are covered by their own
+integration tests, not by the domain gate, and holding them to 100% pushes people
+towards mocking the library they are adapting.
+
+## Cucumber with TypeScript under ESM
+
+`package.json` declares `"type": "module"`, and `tsx` is loaded through
+`NODE_OPTIONS='--import tsx'`. `cucumber.mjs` sets:
+
+```js
+export default {
+  paths: ['features/**/*.feature'],
+  import: ['features/steps/**/*.ts'],
+  format: ['progress', 'summary'],
+  strict: true,
+}
+```
+
+`strict: true` matters for the craft loop: undefined and pending steps fail the run
+instead of passing silently, so a scenario is always unambiguously red or green.
+
+## Path aliases
+
+`@domain`, `@application` and `@infrastructure` are declared in three places and
+must stay in sync: `tsconfig.json` (`paths`), `vitest.config.ts` (`resolve.alias`)
+and `vite.config.ts` (`resolve.alias`). Cucumber resolves them through `tsx`, which
+reads `tsconfig.json`.
+
+**Only subpath imports are supported**: `@domain/Money` resolves everywhere,
+`@domain` bare does not. The two config styles differ — `tsconfig.json` maps
+`"@domain/*"` to `["src/domain/*"]`, while Vite and Vitest alias the bare key
+`'@domain'` to the directory — and they agree only on the subpath form. Importing
+a barrel with `from '@domain'` resolves under Vite and Vitest and then fails
+`yarn typecheck`. Import the module, not the directory.
