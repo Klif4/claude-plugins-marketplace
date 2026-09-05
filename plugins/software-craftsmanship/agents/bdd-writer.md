@@ -1,7 +1,7 @@
 ---
 name: bdd-writer
 description: Use this agent when a business need must be turned into Gherkin scenarios before any test or code is written. Typical triggers include starting a new feature from a business description, adding scenarios to an existing .feature file, and rewriting vague or implementation-leaking scenarios into intention-revealing ones. This agent writes .feature files only. See "When to invoke" in the agent body for worked scenarios.
-model: inherit
+model: sonnet
 color: magenta
 tools: ["Read", "Grep", "Glob", "Write", "Edit"]
 ---

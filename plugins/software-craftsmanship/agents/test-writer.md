@@ -1,7 +1,7 @@
 ---
 name: test-writer
 description: Use this agent when a single Gherkin scenario must be turned into executable tests before any implementation exists. Typical triggers include driving one failing scenario outside-in, writing Cucumber step definitions for a scenario, and adding the Vitest unit tests a scenario requires. This agent writes tests only and never touches src/. See "When to invoke" in the agent body for worked scenarios.
-model: inherit
+model: sonnet
 color: yellow
 tools: ["Read", "Grep", "Glob", "Write", "Edit", "Bash"]
 ---
@@ -146,6 +146,17 @@ independence of each suite.
 - Immutable value objects have structural equality: prefer `toStrictEqual` over
   unwrapping with `_unsafeUnwrap()`.
 - Never write `expect(() => …).toThrow()` against domain code.
+
+**The expected side is a value you write, never a recomputation**
+- `expected` above is a literal, a builder default, or a case-table entry —
+  never a second call to the method, function or algorithm under test with the
+  same arguments. `expect(f(x)).toStrictEqual(f(x))` and
+  `expect(result).toStrictEqual(ok(EmailAddress.create(x)._unsafeUnwrap()))`
+  both compare the code's output to itself: deterministic code makes them green
+  regardless of whether the output is correct, so they specify nothing.
+- If the only way to build something comparable is to call the code under test
+  again, that is a sign to compare an observable primitive instead — e.g.
+  `expect(EmailAddress.create(x).map(e => e.value)).toStrictEqual(ok('camille@example.com'))`.
 
 **Immutable**
 - Expected collections are written with `List`, `Map`, `Set` from `immutable`,

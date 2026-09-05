@@ -1,7 +1,7 @@
 ---
 name: implementer
 description: Use this agent when an existing failing test suite must be made green by writing production code. Typical triggers include implementing source code for freshly written Vitest specs and Cucumber steps, making a red scenario pass, and refactoring src/ once the suite is green. This agent writes production code only and never touches tests or feature files. See "When to invoke" in the agent body for worked scenarios.
-model: inherit
+model: sonnet
 color: green
 tools: ["Read", "Grep", "Glob", "Write", "Edit", "Bash"]
 ---

@@ -179,8 +179,8 @@ have structural equality, which makes `toStrictEqual` exact.
 expect(checkout.execute(basketWorth(Money.euros(24.99))))
   .toStrictEqual(err(new BelowMinimumAmount(Money.euros(25))))
 
-expect(EmailAddress.create('camille@example.com'))
-  .toStrictEqual(ok(EmailAddress.create('camille@example.com')._unsafeUnwrap()))
+expect(EmailAddress.create('camille@example.com').map(email => email.value))
+  .toStrictEqual(ok('camille@example.com'))
 ```
 
 Never `expect(() => …).toThrow()` against domain code — a domain that throws is
@@ -188,6 +188,29 @@ already a bug.
 
 Reach for `_unsafeUnwrap()` only inside builders, never in an assertion: unwrapping
 in a test discards the failure case the assertion was supposed to pin down.
+
+## The expected side is a value written in the test, never a recomputation
+
+```ts
+// Compares the code's output to itself — create() is deterministic, so this is
+// green whether or not create() does the right thing. It tests nothing.
+expect(EmailAddress.create('camille@example.com'))
+  .toStrictEqual(ok(EmailAddress.create('camille@example.com')._unsafeUnwrap()))
+
+// Compares the code's output to a literal written in the test
+expect(EmailAddress.create('camille@example.com').map(email => email.value))
+  .toStrictEqual(ok('camille@example.com'))
+```
+
+The same smell shows up without `Result`: `expect(shippingCostFor(basket))
+.toStrictEqual(shippingCostFor(basket))`, or an "expected" value built by
+re-running the production algorithm on the same input under another name. In
+every assertion, the actual side is a call into the code under test; the
+expected side must be a value someone wrote — a literal, a builder default, a
+case-table entry — never a second call to the method, function or algorithm
+being verified with the same arguments. If the only way to produce something
+comparable is to call the code under test again, the test is not asserting
+anything: find the observable primitive to compare instead.
 
 ## Step definitions
 

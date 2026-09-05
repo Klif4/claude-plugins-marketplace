@@ -134,6 +134,14 @@ Rank by what it costs to fix later, not by how many hits there are.
 - A test that reads the real clock, or computes an expected date from the current
   one: it passes today and fails on a boundary day. It should use a fixed clock and
   a literal date.
+- The expected side of an assertion is a second call to the same method,
+  function or algorithm under test with the same arguments — e.g.
+  `expect(f(x)).toStrictEqual(f(x))`, or an "expected" built by re-running the
+  production code on the input instead of writing a value. Deterministic code
+  makes this green whether or not it is correct: the test asserts nothing.
+  Report it wherever both sides of a `toStrictEqual`/`toEqual`/`toBe` trace back
+  to the same call — the fix is a literal, a builder default, or comparing an
+  observable primitive instead.
 
 **4. Style — cheap to fix, fix in passing**
 - `let`, imperative loops, native arrays where `immutable` is required.
