@@ -7,7 +7,7 @@ The package manager is **yarn**. Never npm.
 ```json
 "test": "vitest run",
 "test:watch": "vitest",
-"test:acceptance": "NODE_OPTIONS='--import tsx' cucumber-js",
+"test:acceptance": "cucumber-js",
 "coverage": "vitest run --coverage",
 "typecheck": "tsc --noEmit",
 "build": "vite build"
@@ -111,20 +111,33 @@ import '@js-joda/timezone'
 
 ## Cucumber with TypeScript under ESM
 
-`package.json` declares `"type": "module"`, and `tsx` is loaded through
-`NODE_OPTIONS='--import tsx'`. `cucumber.mjs` sets:
+`package.json` declares `"type": "module"`, and `cucumber.mjs` installs `tsx`'s ESM
+hooks itself:
 
 ```js
+import { register } from 'tsx/esm/api'
+
+register()
+
 export default {
-  paths: ['features/**/*.feature'],
   import: ['features/steps/**/*.ts'],
   format: ['progress', 'summary'],
+  formatOptions: { snippetInterface: 'async-await' },
   strict: true,
 }
 ```
 
-`strict: true` matters for the craft loop: undefined and pending steps fail the run
-instead of passing silently, so a scenario is always unambiguously red or green.
+Three points, each of which a `NODE_OPTIONS`-based setup gets wrong:
+
+- **`register()` in the config, not `NODE_OPTIONS='--import tsx'` in the script.**
+  The script stays a bare `cucumber-js`, so a run launched from an IDE gutter — which
+  invokes `cucumber-js` directly and never sees the yarn script's environment — loads
+  the TypeScript steps like a run from the terminal.
+- **No `paths` key.** `cucumber-js` already defaults to `features/**/*.feature`.
+  Setting it here would be *merged with*, not overridden by, the feature file an IDE
+  passes on the command line, so asking for one scenario would run the whole suite.
+- **`strict: true`** matters for the craft loop: undefined and pending steps fail the
+  run instead of passing silently, so a scenario is always unambiguously red or green.
 
 ## Path aliases
 
