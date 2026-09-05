@@ -153,7 +153,16 @@ independence of each suite.
 
 ## Check before handing back
 
-Run `yarn craft:verify`, and **observe red**.
+Run the scenario-scoped gate your prompt names, and **observe red**:
+
+```bash
+yarn craft:verify:fast --scenario "<exact scenario title>" <the tests/ files you wrote>
+```
+
+Never run the bare `yarn craft:verify`. That is the full gate — the whole unit
+suite, coverage instrumentation over the domain and every scenario already
+delivered. It belongs to the orchestrator, which runs it once per feature file, and
+it costs minutes here for a verdict the fast gate already gives.
 
 The red must be the right red: an assertion failure or a missing module. A test
 that is already green before any implementation tests nothing — rewrite it.

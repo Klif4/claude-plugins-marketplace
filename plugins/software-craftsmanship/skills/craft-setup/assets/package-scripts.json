@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit",
     "build": "vite build",
     "craft:verify": "node scripts/craft-verify.mjs",
+    "craft:verify:fast": "node scripts/craft-verify.mjs --fast",
     "craft:map": "tsc -p tsconfig.map.json && node scripts/craft-map.mjs"
   }
 }

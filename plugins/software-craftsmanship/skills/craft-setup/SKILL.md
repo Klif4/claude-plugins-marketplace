@@ -65,9 +65,9 @@ Copy from `assets/`, adapting nothing unless the project already diverges
 | `assets/vite.config.ts` | `vite.config.ts` | same aliases, ES2022 |
 | `assets/cucumber.mjs` | `cucumber.mjs` | registers `tsx`'s ESM hooks itself, declares no `paths`, `strict: true` |
 | `assets/tsconfig.map.json` | `tsconfig.map.json` | emits the domain's declarations — the input of `yarn craft:map` |
-| `assets/craft-verify.mjs` | `scripts/craft-verify.mjs` | the loop's gate runner: a digest, not a transcript |
+| `assets/craft-verify.mjs` | `scripts/craft-verify.mjs` | the loop's gate runner, in two modes: a digest, not a transcript |
 | `assets/craft-map.mjs` | `scripts/craft-map.mjs` | regenerates `.craft/api-map.d.ts` |
-| `assets/package-scripts.json` | merge into `package.json` | `"type": "module"` and the eight scripts |
+| `assets/package-scripts.json` | merge into `package.json` | `"type": "module"` and the nine scripts |
 
 The scripts to merge:
 
@@ -79,6 +79,7 @@ The scripts to merge:
 "typecheck": "tsc --noEmit",
 "build": "vite build",
 "craft:verify": "node scripts/craft-verify.mjs",
+"craft:verify:fast": "node scripts/craft-verify.mjs --fast",
 "craft:map": "tsc -p tsconfig.map.json && node scripts/craft-map.mjs"
 ```
 
@@ -90,14 +91,23 @@ defaults to `features/**/*.feature`, and a `paths` key would be merged with, not
 overridden by, the feature file an IDE passes on the command line, turning "run this
 one scenario" into a full-suite run.
 
-The last two exist for the loop, and both are there to keep agent context small.
+The last three exist for the loop: to keep agent context small, and to keep the
+loop's wall-clock from growing with the feature.
 
-`craft:verify` runs the three gates and prints one line per gate when they pass,
-the tail of the output when one fails. The four raw commands print the name of
-every test file and a coverage table over the whole project — several thousand
-tokens landing in an agent's context on every attempt. It also runs the unit suite
-**once** for both the suite gate and the coverage gate, where `yarn test` followed
-by `yarn coverage` runs it twice.
+`craft:verify` is the **full gate**: the whole unit suite, domain coverage at 100%,
+every acceptance scenario and `tsc`. It prints one line per gate when they pass, the
+tail of the output when one fails. The four raw commands print the name of every
+test file and a coverage table over the whole project — several thousand tokens
+landing in an agent's context on every attempt. It also runs the unit suite **once**
+for both the suite gate and the coverage gate, where `yarn test` followed by
+`yarn coverage` runs it twice.
+
+`craft:verify:fast --scenario "<title>" <unit test paths>` is the **per-scenario
+gate**: that scenario, those test files, and `tsc` — no coverage instrumentation and
+no re-run of the scenarios already delivered. The loop runs it on every scenario and
+runs the full gate once per feature file. Running the full gate per scenario instead
+re-verifies every already-green scenario on every iteration, which is what makes a
+twenty-scenario feature crawl.
 
 `craft:map` regenerates `.craft/api-map.d.ts`: every public signature of
 `src/domain`, no method bodies. It is what a fresh agent reads to learn what
@@ -176,8 +186,9 @@ yarn coverage
 
 The two loop scripts are **not** run here, and neither is a failure at this stage:
 
-- `yarn craft:verify` needs at least one test and one scenario — on an empty
-  project vitest and cucumber both exit non-zero on finding nothing.
+- `yarn craft:verify` and `yarn craft:verify:fast` need at least one test and one
+  scenario — on an empty project vitest and cucumber both exit non-zero on finding
+  nothing.
 - `yarn craft:map` needs a `src/domain` that compiles, and this skill deliberately
   leaves `src/` empty.
 

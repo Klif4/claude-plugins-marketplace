@@ -10,7 +10,10 @@ The package manager is **yarn**. Never npm.
 "test:acceptance": "cucumber-js",
 "coverage": "vitest run --coverage",
 "typecheck": "tsc --noEmit",
-"build": "vite build"
+"build": "vite build",
+"craft:verify": "node scripts/craft-verify.mjs",
+"craft:verify:fast": "node scripts/craft-verify.mjs --fast",
+"craft:map": "tsc -p tsconfig.map.json && node scripts/craft-map.mjs"
 ```
 
 ## Running one scenario
@@ -18,6 +21,12 @@ The package manager is **yarn**. Never npm.
 ```bash
 yarn test:acceptance --name "An order just below the minimum is refused"
 ```
+
+`--name` is a **regex**, not a literal: a title containing `.`, `(` or `?` matches
+more than you think, and a `Scenario Outline` title is matched after its
+placeholders have been substituted with the row's values. `yarn craft:verify:fast`
+handles both — it escapes the title and turns `<placeholder>` into `.+` — so prefer
+it when you want one scenario plus its unit tests and a typecheck.
 
 `--name` matches the scenario title as a regular expression. Quote it, and use the
 title exactly as written in the `.feature` file. For a `Scenario Outline`, the
@@ -77,19 +86,25 @@ The gate covers `src/domain/**`, which now includes `src/domain/usecases/**` and
 `src/domain/UseCaseFactory.ts` — that is deliberate: a use case is business
 behaviour and every branch of it must be demanded by a test.
 
-## The two loop scripts
+## The three loop scripts
 
-`craft-setup` installs two scripts that exist for the `craft` loop, and that are
+`craft-setup` installs three scripts that exist for the `craft` loop, and that are
 just as usable by hand:
 
 | Script | What it does |
 |---|---|
-| `yarn craft:verify` | unit suite, domain coverage, acceptance scenarios and `tsc`, in one run — one line per gate when green, the tail of the output plus the coverage shortfall when red |
+| `yarn craft:verify:fast --scenario "<title>" <unit test paths>` | one scenario, the unit test files that specify it, and `tsc` — no coverage instrumentation, no re-run of the scenarios already delivered |
+| `yarn craft:verify` | the whole unit suite, domain coverage, every acceptance scenario and `tsc`, in one run — one line per gate when green, the tail of the output plus the coverage shortfall when red |
 | `yarn craft:map` | regenerates `.craft/api-map.d.ts`: every public signature of `src/domain`, no method bodies, emitted by `tsc` |
 
-Both exist to keep an agent's context small. A fresh agent has to be told what
+The two gates run at different rhythms: the fast one on every scenario, the full
+one once per feature file. The full gate re-runs everything, so running it per
+scenario re-verifies every already-green scenario each time — a cost that grows
+with the feature and buys nothing that the end-of-file run does not catch.
+
+All three exist to keep an agent's context small. A fresh agent has to be told what
 already exists, and the map says it in ~1 line per export instead of forty files;
-`craft:verify` says a suite is red in a handful of lines instead of a transcript.
+either gate says a suite is red in a handful of lines instead of a transcript.
 `craft:verify` also runs the unit suite **once** for both the suite gate and the
 coverage gate, where `yarn test` then `yarn coverage` runs it twice.
 

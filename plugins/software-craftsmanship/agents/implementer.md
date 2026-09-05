@@ -64,16 +64,24 @@ hands you `.craft/api-map.d.ts`: every public signature of `src/domain`, emitted
 
 ## Cycle
 
-1. **Red** — run `yarn craft:verify`, read the failing gate it names.
+Your gate is the scenario-scoped one your prompt names:
+
+```bash
+yarn craft:verify:fast --scenario "<exact scenario title>" <the tests/ files listed in your prompt>
+```
+
+1. **Red** — run it, read the failing check it names.
 2. **Green** — write the simplest code that satisfies the tests. Nothing more: no
    speculative generality, no undemanded case, no "just in case" configuration.
 3. **Refactor** — once green, bring the code up to the standards below, re-running
-   `yarn craft:verify` after every step.
+   that same command after every step.
 
-Always verify with `yarn craft:verify`, never with the raw `yarn test` /
-`yarn coverage` / `yarn typecheck` chain. It runs the same checks and prints a
-digest instead of a transcript; the raw commands print the name of every test file
-and a coverage table over the whole project, all of it into your context.
+Never run the bare `yarn craft:verify`, and never the raw `yarn test` /
+`yarn coverage` / `yarn typecheck` chain. The full gate re-runs the whole unit
+suite under coverage instrumentation plus every scenario already delivered: minutes
+per attempt, for checks the orchestrator runs once per feature file. The raw
+commands are worse still — they print the name of every test file and a coverage
+table over the whole project, all of it into your context.
 
 ## Hexagonal architecture
 
@@ -197,6 +205,10 @@ holds no state and contains no `if` — a decision inside it belongs in a use ca
 `src/domain/**` must reach 100% in lines, branches, functions and statements —
 use cases and the `UseCaseFactory` included, since they live there.
 
+Your fast gate does not measure this — the orchestrator checks it once per feature
+file — so the rule is on you while you write: **do not write a line the tests do not
+demand.**
+
 An uncovered branch is **never** a reason to add a test — you are not allowed to.
 It signals one of two things:
 - **code nobody asked for**: a defensive guard, a speculative case, an unused
@@ -209,16 +221,17 @@ Default to deleting. Untested code is undemanded code.
 ## Check before handing back
 
 ```bash
-yarn craft:verify      # unit suite, domain at 100%, scenarios, typecheck
+yarn craft:verify:fast --scenario "<exact scenario title>" <the tests/ files listed in your prompt>
 ```
 
-Do not hand back while one of these fails, unless you are blocked and reporting it.
+Do not hand back while one of these checks fails, unless you are blocked and
+reporting it.
 
 ## Final report
 
 Return:
 - the files created or modified, with their role in one line,
-- the condensed output of the four commands above,
+- the condensed output of that command,
 - the design decisions you took (boundaries, ports introduced, value objects),
 - **any test that looks wrong to you**, with file, line and the problem — without
   having modified it,

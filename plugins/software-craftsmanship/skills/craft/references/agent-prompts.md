@@ -93,7 +93,8 @@ any, as unknown as, @ts-ignore or @ts-expect-error to work around that.
 
 Do not search wider than features/, tests/ and src/domain/. Never glob `**/*`.
 
-Run yarn craft:verify and confirm the failure is real.
+Confirm the failure is real, with the scenario-scoped gate and nothing heavier:
+yarn craft:verify:fast --scenario "<exact title>" <the tests/ files you wrote>
 
 Return the exact paths written and the API the implementation will have to provide.
 ```
@@ -137,8 +138,10 @@ CONSTRAINTS
 
 Do not search wider than src/ and the test files listed above. Never glob `**/*`.
 
-VERIFY
-yarn craft:verify
+VERIFY — this scenario only. Never run yarn craft:verify: the full suite and the
+coverage gate are the orchestrator's, run once per feature file, and running them
+here costs minutes per attempt.
+yarn craft:verify:fast --scenario "<exact title>" <the tests/ files listed above>
 
 Return the files written, the last lines of that command, and any test you believe
 is wrong — without having modified it.
