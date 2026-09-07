@@ -343,15 +343,53 @@ what the domain should have done has taken a decision away from a use case. The
 same shape serves a CLI, a queue consumer or a scheduled job — each one asks the
 factory, none of them wires a dependency.
 
-## Speaking names
+## Speaking names, and no comments
 
 No abbreviations. No `data`, `info`, `manager`, `helper`, `utils`, `process`,
 `handle`, `doIt`.
 
-No comment explaining *what* the code does — if a comment is needed, extract a
-method whose name says it. A comment is justified only for a *why* that cannot be
-derived from the code: an external constraint, a counter-intuitive business
-decision, a deliberate deviation.
+**The code carries no comments.** Not an explanatory line, not a header banner,
+not a section divider, not commented-out code, not a `TODO`. A comment is a
+confession that the code does not say what it does — so fix the code instead.
+
+```ts
+// Refuse: the comment carries the rule
+// an order is late when today is past the due date, tolerance of two days
+if (day.isAfter(this.dueOn.plusDays(2))) { … }
+
+// Keep: the name carries the rule
+isLateOn(day: LocalDate): boolean {
+  return day.isAfter(this.lastToleratedDay())
+}
+
+private lastToleratedDay(): LocalDate {
+  return this.dueOn.plus(DELIVERY_TOLERANCE)
+}
+```
+
+The moves that replace a comment:
+
+| The comment was about | Write instead |
+|---|---|
+| What a block does | An extracted method whose name is that sentence |
+| What a condition means | A named predicate, or a domain type true by construction |
+| What a magic value is | A named constant, or a value object |
+| Why a failure happens | A named domain error carrying the data |
+| A business rule | A Gherkin scenario, and a test whose name states it |
+| A `TODO` | A ticket, or the work itself |
+| A change you made | The commit message |
+| Dead code kept "just in case" | Delete it; git remembers |
+
+An external constraint no name can express — a third party's undocumented
+behaviour, a regulatory reference — is the one thing prose is for, and it belongs
+in the test that pins the behaviour or in the commit message, not above the line.
+
+JSDoc/TSDoc blocks are comments and follow the same rule. Typed signatures are
+not: `readonly`, domain types and named errors already say what a header banner
+used to.
+
+The `// src/domain/Order.ts` markers in these reference files are a documentation
+device showing where a snippet lives — they are not part of the code to copy.
 
 ## Deleting undemanded code
 

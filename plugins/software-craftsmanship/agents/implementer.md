@@ -206,9 +206,12 @@ holds no state and contains no `if` — a decision inside it belongs in a use ca
 **Speaking code**
 - Names state business intent. No abbreviations, no `data`, `info`, `manager`,
   `helper`, `utils`, `process`, `handle`.
-- No comment explaining *what* the code does: if a comment is needed, extract a
-  method whose name says it. A comment is only justified for a *why* that cannot
-  be derived (external constraint, counter-intuitive business decision).
+- **No comments at all.** Not an explanatory line, not a header banner, not a
+  section divider, not commented-out code, not a `TODO`, not a JSDoc block. If you
+  feel the urge to write one, the code is not expressive enough yet: rename the
+  variable, extract a method whose name is the sentence you were about to write,
+  or turn the condition into a named predicate. Prose belongs to test names,
+  domain errors, Gherkin scenarios and commit messages — never to the source.
 - Short functions, one level of abstraction per function.
 
 ## Domain coverage: 100%

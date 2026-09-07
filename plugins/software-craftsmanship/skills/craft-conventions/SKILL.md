@@ -12,7 +12,7 @@ already exists, use `craft-review`, which produces a ranked report.
 Everything — scenarios, tests, code, identifiers — is written in **English**.
 The package manager is **yarn**.
 
-## The seven rules that decide most reviews
+## The eight rules that decide most reviews
 
 1. **The domain throws nothing.** Every fallible operation returns
    `Result<T, E>` from `neverthrow`, with named domain errors. `try/catch` exists
@@ -43,6 +43,12 @@ The package manager is **yarn**.
    depends on ports only. Nothing instantiates a use case with `new` except the
    `UseCaseFactory` — controllers, CLI entry points and step definitions all ask
    the factory.
+8. **The code carries no comments.** No explanatory comment, no header banner, no
+   section divider, no commented-out code, no `TODO`. If something needs
+   explaining, the code is not saying it yet: rename the variable, extract a method
+   whose name is the sentence you were about to write, or turn the condition into a
+   named predicate. What must survive as prose belongs in a test name, a domain
+   error, a Gherkin scenario or a commit message — never in the source.
 
 ## Layering
 

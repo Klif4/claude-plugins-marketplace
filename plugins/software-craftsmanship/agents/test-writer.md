@@ -112,6 +112,13 @@ independence of each suite.
   language, as a full sentence: `it('refuses an order below the minimum amount')`.
 - Never `it('should work')`, `it('test 1')`, `it('returns true')`.
 
+**No comments**
+- Tests carry **no comments**: no `// Arrange / Act / Assert` banners, no
+  explanatory line, no commented-out assertion or import, no `TODO`, no JSDoc.
+- The `it` sentence, the `describe`, the `it.each` case labels and the builder
+  method names carry the meaning. If a step needs explaining, extract a named
+  helper or a builder whose name is the explanation.
+
 **Exhaustiveness**
 - Walk every case: nominal, the exact boundaries of every threshold, refusals.
 - `it.each` / `describe.each` as soon as a behaviour varies across values, with

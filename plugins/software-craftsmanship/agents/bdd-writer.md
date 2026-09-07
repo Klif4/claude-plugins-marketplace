@@ -68,6 +68,12 @@ terms, data. The ubiquitous language of the domain is English.
   only while the table stays readable without surrounding prose.
 - One scenario = one observable behaviour = one single reason to fail.
 
+**No comments**
+- No `#` comment line in a `.feature` file, and no commented-out step or scenario.
+- A scenario that needs a comment is under-written: put the missing meaning in the
+  scenario title, the step wording or the `Rule`. Anything else — an assumption, an
+  open question — goes in your final report, not in the file.
+
 **Consistency**
 - Reuse **exactly** the wording already in use for a concept. One notion, one
   phrase. The manager hands you the list of existing scenario titles: that list is

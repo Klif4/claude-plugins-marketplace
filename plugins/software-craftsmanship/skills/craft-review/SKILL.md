@@ -146,7 +146,10 @@ Rank by what it costs to fix later, not by how many hits there are.
 **4. Style — cheap to fix, fix in passing**
 - `let`, imperative loops, native arrays where `immutable` is required.
 - Names like `data`, `info`, `manager`, `helper`, `utils`, `process`.
-- Comments explaining *what* rather than *why*.
+- Any comment: explanatory line, header banner, section divider, commented-out
+  code, `TODO`, JSDoc block. The rule is zero comments — report each one with the
+  move that replaces it (an extracted method, a named predicate, a named constant,
+  a domain error, a test name), or with `delete` when it comments out code.
 
 ## Uncovered domain code
 
