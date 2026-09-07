@@ -132,6 +132,15 @@ asked for**: a defensive guard, a speculative case, an unused optional parameter
 Delete it first; only treat it as a specification hole when the behaviour is
 genuinely required and no test demands it.
 
+## Declarative, and readable first
+
+The style is declarative — `Result` combinators, `immutable` operators, no `let`,
+no imperative loop, no mutation. Chaining is the pattern that usually expresses it,
+but it is a direction to follow when it pays, not a rule to satisfy: chain while
+the chain reads as one sentence about the business, and break it into named `const`
+steps or an extracted method as soon as it stops. Simplicity and ergonomics decide
+which shape wins; the bans on `let`, loops and mutation hold in either.
+
 ## Additional resources
 
 ### Reference files
@@ -142,7 +151,8 @@ genuinely required and no test demands it.
 - **`references/unit-tests.md`** — Vitest and Cucumber patterns: naming, `it.each`
   tables, builders, when a `mock<Port>()` beats a hand-written fake, asserting on
   `Result`, and the assertions that couple a test to an implementation.
-- **`references/implementation.md`** — value objects, `Result` chaining, Immutable
+- **`references/implementation.md`** — value objects, `Result` chaining and when to
+  break a chain, Immutable
   collections, dates with js-joda, tell-don't-ask, use cases and the
   `UseCaseFactory`, ports and adapters, with before/after code.
 - **`references/tooling.md`** — yarn scripts, Vitest coverage thresholds, running

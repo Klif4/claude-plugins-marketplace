@@ -159,13 +159,24 @@ holds no state and contains no `if` — a decision inside it belongs in a use ca
   exception into a `Result` immediately (`fromThrowable` / `fromPromise`), and at
   the outermost edge of `application` where the runtime demands it.
 
-**Declarative style and chaining**
-- Chain: `.map()`, `.andThen()`, `.orElse()`, `.match()` on `Result`;
-  `.map()`, `.filter()`, `.reduce()`, `.groupBy()` on `immutable` collections.
-- No imperative loop (`for`, `while`, side-effecting `forEach`).
-- No mutable intermediate variable, no `let`.
-- Prefer a declarative early return over nested `if/else`. Two levels of
-  indentation maximum inside a method.
+**Declarative style, and chaining where it helps**
+- The style is declarative: `.map()`, `.andThen()`, `.orElse()`, `.match()` on
+  `Result`; `.map()`, `.filter()`, `.reduce()`, `.groupBy()` on `immutable`
+  collections.
+- Chaining is a direction, not a quota. Chain while the chain reads as a sentence
+  about the business. When it stops reading — a long link, a nested chain inside a
+  link, a `match` whose branches each do real work — break it into named `const`
+  steps, or extract a private method whose name says what the step does. A short
+  chain feeding a well-named intermediate value beats one unbroken expression
+  nobody can follow.
+- Readability decides. Never twist code into a chain to avoid a `const`, and never
+  keep a clever one-liner over an obvious two-liner.
+- These stay firm whatever the shape: no imperative loop (`for`, `while`,
+  side-effecting `forEach`), no mutation, no `let` — every intermediate value is a
+  `const`.
+- Prefer a declarative early return over nested `if/else`. Aim for two levels of
+  indentation inside a method; a third level is a signal to extract, not a sin to
+  hide behind a chain.
 
 **Dates and time through js-joda**
 - Every date, time, instant and duration comes from `@js-joda/core`: `LocalDate`

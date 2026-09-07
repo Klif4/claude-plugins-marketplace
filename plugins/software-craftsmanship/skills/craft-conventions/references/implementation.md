@@ -76,8 +76,40 @@ const checkout = (basket: Basket): Result<Order, CheckoutFailure> =>
     .map((order) => order.withShipping(shippingFor(order)))
 ```
 
-No `let`, no imperative loop, no mutable accumulator. Two levels of indentation
-maximum inside a method.
+No `let`, no imperative loop, no mutable accumulator. Aim for two levels of
+indentation inside a method.
+
+### Chain while it reads
+
+Chaining is a direction and a pattern to reach for when it fits, not a rule to
+satisfy. It earns its place while the chain reads as one sentence about the
+business. Past that point it costs more than it gives: a link spanning several
+lines, a chain nested inside a link, a `match` whose branches each do real work.
+Then break it — a named `const` per step, or a private method whose name is the
+step.
+
+```ts
+// One sentence — keep the chain
+const checkout = (basket: Basket): Result<Order, CheckoutFailure> =>
+  basket
+    .ensureReachesMinimum(MINIMUM_ORDER_AMOUNT)
+    .andThen((eligible) => Order.place(eligible.customer(), eligible.lines()))
+
+// Too much in one breath — name the steps instead
+const settle = (invoice: Invoice, payments: List<Payment>): Result<Receipt, SettlementFailure> => {
+  const settled = payments.reduce((current, payment) => current.pay(payment), invoice)
+  const discount = discountFor(settled)
+
+  return settled.close(discount).map((closed) => Receipt.of(closed))
+}
+```
+
+Both are declarative and both are total. The second is not a fallback: it is the
+right shape when naming the intermediate values tells the reader more than one
+unbroken expression would. Never twist code into a chain to avoid a `const`, and
+never keep a clever one-liner over an obvious two-liner. What stays firm either
+way: no `let`, no imperative loop, no mutation — every intermediate value is a
+`const`.
 
 For asynchronous work, `ResultAsync` chains the same way:
 

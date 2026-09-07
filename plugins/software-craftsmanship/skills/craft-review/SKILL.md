@@ -145,6 +145,11 @@ Rank by what it costs to fix later, not by how many hits there are.
 
 **4. Style — cheap to fix, fix in passing**
 - `let`, imperative loops, native arrays where `immutable` is required.
+- A chain that has stopped reading: links spanning several lines, a chain nested
+  inside a link, a `match` whose branches each do real work. Recommend naming the
+  steps as `const`s or extracting a method — not more chaining. Conversely, never
+  report declarative code merely for not being a chain: a readable sequence of
+  named `const` steps is the convention too.
 - Names like `data`, `info`, `manager`, `helper`, `utils`, `process`.
 - Any comment: explanatory line, header banner, section divider, commented-out
   code, `TODO`, JSDoc block. The rule is zero comments — report each one with the
