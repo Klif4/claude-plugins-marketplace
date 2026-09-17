@@ -53,14 +53,61 @@ file=$(jq -r '.tool_input.file_path // .tool_input.notebook_path // empty' <<<"$
 [[ -z "$file" ]] && exit 0
 cwd=$(jq -r '.cwd // empty' <<<"$input")
 
+resolve() {
+  if command -v realpath >/dev/null 2>&1; then
+    realpath -m -- "$1" 2>/dev/null || printf '%s' "$1"
+  else
+    printf '%s' "$1"
+  fi
+}
+
+# First existing ancestor: a new file's directory may not exist yet, and git
+# needs a directory it can run in.
+existing_dir() {
+  local dir=$1
+  while [[ -n "$dir" && "$dir" != "/" && ! -d "$dir" ]]; do dir=$(dirname -- "$dir"); done
+  printf '%s' "$dir"
+}
+
+# Root of the checkout holding this path. In a worktree that is the worktree's
+# own root, which is exactly what the allow-list is relative to.
+git_root() { git -C "$(existing_dir "$1")" rev-parse --show-toplevel 2>/dev/null || true; }
+# Shared .git directory: identical for the main checkout and all its worktrees.
+git_common() {
+  local dir out
+  dir=$(existing_dir "$1")
+  out=$(git -C "$dir" rev-parse --git-common-dir 2>/dev/null || true)
+  [[ -z "$out" ]] && return 0
+  case "$out" in /*) ;; *) out="$dir/$out" ;; esac
+  resolve "$out"
+}
+
 case "$file" in
   /*) absolute="$file" ;;
   *)  absolute="$cwd/$file" ;;
 esac
-if command -v realpath >/dev/null 2>&1; then
-  absolute=$(realpath -m -- "$absolute" 2>/dev/null || printf '%s' "$absolute")
+absolute=$(resolve "$absolute")
+
+# Anchor the allow-list on the repository root rather than on the hook's cwd:
+# the two differ whenever the session or the agent runs from a worktree, and
+# subtracting the wrong prefix turns every path into a scope violation.
+root=$(git_root "$(dirname -- "$absolute")")
+if [[ -n "$root" ]]; then
+  root=$(resolve "$root")
+  cwd_root=$(resolve "$(git_root "$cwd")")
+  if [[ "$root" != "$cwd_root" ]]; then
+    session_repo=$(git_common "$cwd")
+    file_repo=$(git_common "$(dirname -- "$absolute")")
+    if [[ -z "$session_repo" || "$file_repo" != "$session_repo" ]]; then
+      refuse "$tool on '$file' is outside the project."
+    fi
+  fi
+  base="$root"
+else
+  base=$(resolve "$cwd")
 fi
-relative="${absolute#"$cwd"/}"
+
+relative="${absolute#"$base"/}"
 [[ "$relative" == "$absolute" ]] && refuse "$tool on '$file' is outside the project."
 
 for prefix in "${deny[@]}"; do
