@@ -74,8 +74,12 @@ hands you `.craft/api-map.d.ts`: every public signature of `src/domain`, emitted
 Your gate is the feature-scoped one your prompt names:
 
 ```bash
-yarn craft:verify:fast --feature <the .feature file> <the tests/ files listed in your prompt>
+yarn craft:verify:fast --no-typecheck --feature <the .feature file> <the tests/ files listed in your prompt>
 ```
+
+`--no-typecheck` drops `tsc` from the run, and the two checks that remain run
+concurrently: this is the command you repeat after every edit, and the manager runs
+the full fast gate — typecheck included — the moment you hand back.
 
 1. **Red** — run it, read the failing check it names.
 2. **Green** — write the simplest code that satisfies the tests. Nothing more: no
@@ -159,6 +163,29 @@ holds no state and contains no `if` — a decision inside it belongs in a use ca
   exception into a `Result` immediately (`fromThrowable` / `fromPromise`), and at
   the outermost edge of `application` where the runtime demands it.
 
+**No `undefined`, no `null` — absence is an `Option`**
+- `undefined` and `null` never appear in `src/domain/**`: not as a return type,
+  not as a property, not as an optional `?` parameter, not as a union member, not
+  as a default. A value that may be missing is an `Option<T>` from
+  `@domain/Option`.
+- `Option.of(value)`, `Option.empty()`, and `Option.fromNullable(raw)` at a
+  boundary. The caller stays in the chain: `map`, `andThen`, `filter`, `or`,
+  `unwrapOr`, `match`. Never an emptiness check followed by a branch.
+- Absence and failure are different. `Option<T>` is *there may be nothing, and
+  that is normal*; `Result<T, E>` is *this could not be done, and here is why*.
+  When an absence **is** a business failure, cross over with
+  `.okOr(new SomeNamedFailure(...))` — do not model it as an empty `Option` the
+  caller has to interpret.
+- Only an `infrastructure` adapter ever sees a nullable value from a library, and
+  it converts it on the spot with `Option.fromNullable`. Nothing downstream of it
+  sees the hole.
+- `Option.ts` already exists — `craft-setup` laid it down with its own test.
+  Never rewrite it, never write a second one, and never add a method to it that no
+  test demands.
+- A method that returns nothing returns `void`, not `Option<void>`.
+- If a test asserts on `undefined` coming out of the domain, that is a test that
+  looks wrong: **report it**, do not satisfy it.
+
 **Declarative style, and chaining where it helps**
 - The style is declarative: `.map()`, `.andThen()`, `.orElse()`, `.match()` on
   `Result`; `.map()`, `.filter()`, `.reduce()`, `.groupBy()` on `immutable`
@@ -236,14 +263,18 @@ tests do not demand.**
 
 An uncovered branch is **never** a reason to add a test — you are not allowed to.
 It signals one of two things:
-- **code nobody asked for**: a defensive guard, a speculative case, an unused
-  optional parameter → **delete it**;
+- **code nobody asked for**: a defensive guard, a speculative case, an emptiness
+  check on something already typed as an `Option`, an unused parameter →
+  **delete it**;
 - **a hole in the specification**: the behaviour is legitimate but no test demands
   it → **report it**, add nothing.
 
 Default to deleting. Untested code is undemanded code.
 
 ## Check before handing back
+
+Once, without `--no-typecheck` — the last run before handing back is the one that
+must also compile:
 
 ```bash
 yarn craft:verify:fast --feature <the .feature file> <the tests/ files listed in your prompt>

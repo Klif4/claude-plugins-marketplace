@@ -66,11 +66,13 @@ printed, never a full test transcript.
 ## Preconditions
 
 1. Confirm the toolchain: `vitest`, `@cucumber/cucumber`, `immutable`, `neverthrow`,
-   `@js-joda/core` and `vitest-mock-extended` in `package.json`, plus the `test`,
+   `@js-joda/core` and `vitest-mock-extended` in `package.json`, `src/domain/Option.ts`
+   with its test under `tests/domain/`, plus the `test`,
    `test:acceptance`, `coverage`, `typecheck`, **`craft:verify`**,
-   **`craft:verify:fast`** and **`craft:map`** scripts. If anything is missing, run
-   the `craft-setup` skill first — the last three are what keep the agents' context
-   and the loop's wall-clock bounded, and the loop is much slower without them.
+   **`craft:verify:fast`**, **`craft:map`**, **`craft:scope`** and
+   **`craft:commit`** scripts. If anything is missing, run the `craft-setup` skill
+   first — the last five are what keep the agents' context and the loop's
+   wall-clock bounded, and the loop is much slower without them.
 2. Require a git repository — the boundary control depends on it. Offer `git init`
    if absent.
 3. Require a clean working tree (`git status --porcelain` empty). If dirty, ask the
@@ -136,12 +138,14 @@ conventions: they already live in the agent definition, and repeating them in th
 prompt only creates a second, drifting copy. The agent writes the step definitions
 for every scenario of the file first, then the unit tests.
 
-**3c. Boundary check.** Only `tests/` and `features/steps/` may have changed —
-everything else, including `.feature` files and every config, must be untouched.
-The plugin's `PreToolUse` hook refuses a `Write` or `Edit` outside the agent's
-scope before it lands, so a violation here means the agent went through the shell:
-revert it, record it, and continue. Snapshot the test files into the git index:
-that snapshot is what protects them during the next phase.
+**3c. Boundary check.** `yarn craft:scope --allow tests/ features/steps/ --stage
+tests features`. Only `tests/` and `features/steps/` may have changed — everything
+else, including `.feature` files and every config, must be untouched. The plugin's
+`PreToolUse` hook refuses a `Write` or `Edit` outside the agent's scope before it
+lands, so a violation here means the agent went through the shell: the script
+reverts it, you record it, and the loop continues. The same call snapshots the test
+files into the git index — that snapshot is what protects them during the next
+phase — and prints the list of files written.
 
 **3d. Confirm red.** `yarn craft:verify:fast --feature <path> <the tests/ paths
 from 3c>` — it must fail. Only this file's scenarios and only the test files just
@@ -154,9 +158,11 @@ the feature title and its path, and `.craft/api-map.d.ts`. Inject nothing from t
 test-writer's report, no scenario bodies, and no list of existing source files —
 the tests are the specification and the map covers the rest.
 
-**3f. Boundary check.** Only `src/` may have changed since the snapshot. A test
-modified means the implementer bent the specification to fit the code; a config
-modified means it lowered a gate. Revert any violation and record it.
+**3f. Boundary check.** `yarn craft:scope --allow src/` — no `--stage` this time,
+the index must keep holding the test snapshot alone. Only `src/` may have changed
+since it. A test modified means the implementer bent the specification to fit the
+code; a config modified means it lowered a gate. The script reverts the violation;
+record it.
 
 **3g. The fast gate.**
 
@@ -164,10 +170,11 @@ modified means it lowered a gate. Revert any violation and record it.
 yarn craft:verify:fast --feature <path> <the tests/ paths from 3c>
 ```
 
-Three checks, and its exit code is the verdict: the unit test files just written are
-green, every scenario of this file is green, and `tsc --noEmit` is clean over the
-whole project. No coverage instrumentation, no re-run of the feature files already
-delivered.
+Three checks running concurrently, and its exit code is the verdict: the unit test
+files just written are green, every scenario of this file is green, and
+`tsc --noEmit` is clean over the whole project. No coverage instrumentation, no
+re-run of the feature files already delivered. This is the run that answers for
+`tsc`: the agents drop it from their own loop with `--no-typecheck`.
 
 It deliberately cannot see a regression in a previously passing test or in another
 feature file, nor a domain file short of 100%. That is the full gate's job at 3h —
@@ -195,11 +202,12 @@ work as a violation and reverts it. Three attempts maximum per feature file, the
 stop and report to the user which scenarios are green and which are not.
 `references/loop.md` maps each failure to its role.
 
-**3j. Regenerate the map, then commit.** Run `yarn craft:map` — it rewrites
-`.craft/api-map.d.ts` from the code that just went green, and that file is all the
-next iteration's agents will receive about the existing code. Skip it only when
-nothing under `src/domain` changed. Then one commit per feature file, both gates
-green in it: `feat(<domain>): <feature title>`. Mark the todo done, move on.
+**3j. Regenerate the map, then commit.** `yarn craft:commit "feat(<domain>):
+<feature title>"` — it rewrites `.craft/api-map.d.ts` from the code that just went
+green (skipping it when nothing under `src/domain` changed), stages, and commits.
+That map file is all the next iteration's agents will receive about the existing
+code. One commit per feature file, both gates green in it. Mark the todo done,
+move on.
 
 A feature file is done only when the full gate is green and it is committed.
 

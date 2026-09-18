@@ -11,7 +11,8 @@ makes them all green; both gates then run on that file before it is committed.
 
 | Gate | Command | When | What it proves |
 |---|---|---|---|
-| Fast | `yarn craft:verify:fast --feature <path> <unit test paths>` | at 3d, at 3g, and inside both agents | the file's scenarios are red, then green, and the project typechecks |
+| Fast | `yarn craft:verify:fast --feature <path> <unit test paths>` | at 3d and at 3g | the file's scenarios are red, then green, and the project typechecks |
+| Fast, no typecheck | `yarn craft:verify:fast --no-typecheck --feature <path> <unit test paths>` | inside both agents, after every edit | the same, minus `tsc` — the orchestrator runs it at 3g |
 | Full | `yarn craft:verify` | at 3h, once the fast gate is green | the whole unit suite is green, domain coverage is 100%, every scenario of every file is green |
 
 The two gates keep their split even though both now run once per file. The fast
@@ -66,43 +67,37 @@ the coverage gate undetected; one that removes `strict: true` from `cucumber.mjs
 undefined steps pass silently. The allow-list catches both, and everything else
 nobody thought of.
 
-Two commands describe what an agent did:
+`yarn craft:scope --allow <prefixes>` is what applies it. Two commands describe
+what an agent did, and the script runs both:
 
 - `git diff --name-only` — tracked files changed in the working tree since the
   index. At the start of an iteration the index equals `HEAD`, and phase 3c stages
   the tests, so this always means "changed since the last checkpoint".
 - `git ls-files --others --exclude-standard` — new files.
 
+It is one call rather than six because every one of them was a round-trip of the
+orchestrator's own — and, without a permission allow-list, an approval prompt of
+its own. That is orchestration time, and it bought nothing.
+
 ## Phase 3c — after the test-writer
 
 Allowed: `tests/` and `features/steps/`.
 
 ```bash
-git diff --name-only            | grep -vE '^(tests/|features/steps/)'
-git ls-files --others --exclude-standard | grep -vE '^(tests/|features/steps/)'
+yarn craft:scope --allow tests/ features/steps/ --stage tests features
 ```
 
-Both must print nothing. Anything printed is a violation — a `.feature` rewritten,
-a `src/` file created, a config relaxed. Record it, then revert:
+One call does the four things this phase needs: it lists what changed outside the
+allow-list, reverts it, snapshots the tests into the index — the snapshot phase 3f
+compares against — and prints the list of files the test-writer wrote, which is the
+only thing the implementer receives and whose `tests/` entries the fast gate runs.
 
-```bash
-git diff --name-only | grep -vE '^(tests/|features/steps/)' | xargs -r git checkout --
-git ls-files --others --exclude-standard | grep -vE '^(tests/|features/steps/)' | xargs -r rm -f
-```
-
-Then snapshot the tests into the index. This snapshot is what phase 3f compares
-against:
-
-```bash
-git add -A -- tests features
-```
-
-Record the list of files the test-writer wrote — it is the only thing the
-implementer receives, and the `tests/` entries in it are what the fast gate runs:
-
-```bash
-git diff --cached --name-only -- tests features
-```
+`SCOPE clean` is the expected line. Anything else is a violation — a `.feature`
+rewritten, a `src/` file created, a config relaxed: **record it** for the closing
+report, and read what the script did with it. A tracked file is restored from the
+index. An untracked file is deleted under `src/`, `tests/` and `features/`, and
+only reported outside them: nothing the loop did not certainly create is removed
+from disk, so a stray path there is yours to look at.
 
 ## Phase 3d — confirm red
 
@@ -132,16 +127,11 @@ Allowed: `src/` only. The index holds the test snapshot, so any unstaged change 
 something the implementer did.
 
 ```bash
-git diff --name-only            | grep -vE '^src/'
-git ls-files --others --exclude-standard | grep -vE '^src/'
+yarn craft:scope --allow src/
 ```
 
-Both must print nothing. Revert any violation:
-
-```bash
-git diff --name-only | grep -vE '^src/' | xargs -r git checkout --
-git ls-files --others --exclude-standard | grep -vE '^src/' | xargs -r rm -f
-```
+No `--stage` here: the index must keep holding the test snapshot alone until the
+iteration is committed.
 
 A violation here is serious. A test modified means the implementer tried to make
 the specification fit the code; a config modified means it tried to lower a gate.
@@ -161,8 +151,11 @@ yarn craft:verify:fast --feature <the feature file> <the tests/ paths from 3c>
 | Every scenario of this file is green | `cucumber-js <the feature file>` |
 | The project typechecks | `tsc --noEmit` |
 
-`tsc` stays whole-project in both modes — it is cheap and it is the one check that
-catches a signature this file broke elsewhere.
+The three checks run **concurrently**: they are independent, so the gate costs the
+slowest of them instead of their sum. `tsc` stays whole-project — with
+`incremental` on in `tsconfig.json` it re-checks what changed, and it is the one
+check that catches a signature this file broke elsewhere. Inside the agents it is
+dropped entirely (`--no-typecheck`): this phase is where it is answered for.
 
 What the fast gate deliberately does **not** see: a previously passing unit test
 this iteration broke, a scenario of another feature file it broke, and a domain
@@ -253,11 +246,11 @@ abandoning the file as a block.
 ## Phase 3j — regenerate the map, then commit
 
 ```bash
-git status --porcelain -- src/domain   # empty? skip craft:map
-yarn craft:map
-git add -A
-git commit -m "feat(<domain>): <feature title>"
+yarn craft:commit "feat(<domain>): <feature title>"
 ```
+
+One call: it regenerates the map when `src/domain` changed, stages everything, and
+commits. What follows is what it does and why, not commands to run by hand.
 
 `craft:map` rewrites `.craft/api-map.d.ts` from the code that just went green: the
 public signatures of `src/domain`, no method bodies. It is the only thing the next
@@ -267,14 +260,15 @@ value object that already exists, which costs far more than the `tsc` run.
 
 Skip it only when this iteration changed nothing under `src/domain` — a feature
 satisfied by existing domain code and a new adapter. The map would come out
-identical. `git status --porcelain` is what to ask, not `git diff`: a recovery may
+identical. `git status --porcelain` is what the script asks, not `git diff`: a recovery may
 have staged `src/`, and staged changes are invisible to an unqualified `git diff`.
 
 It is `tsc` output, so it cannot drift from the code. No agent ever writes it, and
 `.craft/` is gitignored: `git add -A` will not pick it up.
 
 If `craft:map` fails while the gates passed, the cause is `tsconfig.map.json`, not
-the domain — report it and keep going; a missing map degrades the next iteration,
+the domain — `craft:commit` prints `MAP FAILED` and commits anyway. Report it and
+keep going; a missing map degrades the next iteration,
 it does not break it. The script wipes its staging directory before every run, so a
 failed run never leaks stale declarations into the next map.
 

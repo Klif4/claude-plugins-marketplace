@@ -1,6 +1,6 @@
 ---
 name: craft-setup
-description: This skill should be used when the user asks to "set up the craft toolchain", "bootstrap a BDD TypeScript project", "add vitest and cucumber", "set up hexagonal architecture", "configure 100% domain coverage", or when the craft loop reports a missing dependency or script. It installs Vitest, Cucumber, Immutable, neverthrow, js-joda and vitest-mock-extended with yarn, and lays out the hexagonal directory structure with use cases in the domain.
+description: This skill should be used when the user asks to "set up the craft toolchain", "bootstrap a BDD TypeScript project", "add vitest and cucumber", "set up hexagonal architecture", "configure 100% domain coverage", or when the craft loop reports a missing dependency or script. It installs Vitest, Cucumber, Immutable, neverthrow, js-joda and vitest-mock-extended with yarn, lays down the domain `Option` type that replaces `undefined`, and lays out the hexagonal directory structure with use cases in the domain.
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 ---
 
@@ -59,17 +59,21 @@ Do not install it speculatively.
 ## 3. Configuration
 
 Copy from `assets/`, adapting nothing unless the project already diverges
-(`mkdir -p scripts` first — two of them land there):
+(`mkdir -p scripts` first — four of them land there):
 
 | Asset | Destination | What matters in it |
 |---|---|---|
-| `assets/tsconfig.json` | `tsconfig.json` | `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, relative `@domain`/`@application`/`@infrastructure` aliases and no `baseUrl` (TypeScript 7 removed it) |
+| `assets/tsconfig.json` | `tsconfig.json` | `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, relative `@domain`/`@application`/`@infrastructure` aliases and no `baseUrl` (TypeScript 7 removed it), `incremental` with its build info under `.craft/` — the loop typechecks after every edit, and a whole-project recompilation each time is the single most expensive thing it does for nothing |
 | `assets/vitest.config.ts` | `vitest.config.ts` | **100% thresholds on `src/domain/**`** — this is what the loop's coverage gate reads |
 | `assets/cucumber.mjs` | `cucumber.mjs` | registers `tsx`'s ESM hooks itself, declares no `paths`, `strict: true` |
 | `assets/tsconfig.map.json` | `tsconfig.map.json` | emits the domain's declarations with `rootDir` pinned to `src/domain` — the input of `yarn craft:map` |
 | `assets/craft-verify.mjs` | `scripts/craft-verify.mjs` | the loop's gate runner, in two modes: a digest, not a transcript |
 | `assets/craft-map.mjs` | `scripts/craft-map.mjs` | runs `tsc -p tsconfig.map.json` on a clean staging dir and assembles `.craft/api-map.d.ts` |
-| `assets/package-scripts.json` | merge into `package.json` | `"type": "module"` and the eight scripts |
+| `assets/craft-scope.mjs` | `scripts/craft-scope.mjs` | the loop's boundary check: lists what an agent wrote outside its allow-list, reverts it, snapshots the rest |
+| `assets/craft-commit.mjs` | `scripts/craft-commit.mjs` | closes an iteration: conditional `craft:map`, stage, commit |
+| `assets/Option.ts` | `src/domain/Option.ts` | the domain's absent-value type — `undefined` and `null` are banned under `src/domain/**` |
+| `assets/Option.test.ts` | `tests/domain/Option.test.ts` | its specification, and what keeps it at 100% under the coverage gate |
+| `assets/package-scripts.json` | merge into `package.json` | `"type": "module"` and the ten scripts |
 
 The scripts to merge:
 
@@ -81,7 +85,9 @@ The scripts to merge:
 "typecheck": "tsc --noEmit",
 "craft:verify": "node scripts/craft-verify.mjs",
 "craft:verify:fast": "node scripts/craft-verify.mjs --fast",
-"craft:map": "node scripts/craft-map.mjs"
+"craft:map": "node scripts/craft-map.mjs",
+"craft:scope": "node scripts/craft-scope.mjs",
+"craft:commit": "node scripts/craft-commit.mjs"
 ```
 
 `test:acceptance` is a bare `cucumber-js` with no `NODE_OPTIONS`: `cucumber.mjs`
@@ -92,8 +98,9 @@ defaults to `features/**/*.feature`, and a `paths` key would be merged with, not
 overridden by, the feature file an IDE passes on the command line, turning "run this
 one scenario" into a full-suite run.
 
-The last three exist for the loop: to keep agent context small, and to keep the
-loop's wall-clock from growing with the feature.
+The last five exist for the loop: to keep agent context small, to keep the loop's
+wall-clock from growing with the feature, and to keep the number of round-trips
+between two agent launches down to a handful.
 
 `craft:verify` is the **full gate**: the whole unit suite, domain coverage at 100%,
 every acceptance scenario and `tsc`. It prints one line per gate when they pass, the
@@ -105,11 +112,29 @@ for both the suite gate and the coverage gate, where `yarn test` followed by
 
 `craft:verify:fast --feature <path> <unit test paths>` is the **feature-file
 gate**: the scenarios of that one file, those test files, and `tsc` — no coverage
-instrumentation and no re-run of the feature files already delivered. The loop
-drives one feature file per iteration, and this is the gate its agents run while
-they work; the full gate runs once, after it is green. Handing the agents the full
-gate instead costs minutes per attempt, for checks that only need to hold once the
-file is done.
+instrumentation and no re-run of the feature files already delivered. Its checks are
+independent, so they run **concurrently**: the gate costs the slowest of them rather
+than their sum. The loop drives one feature file per iteration, and this is the gate
+its agents run while they work; the full gate runs once, after it is green. Handing
+the agents the full gate instead costs minutes per attempt, for checks that only
+need to hold once the file is done.
+
+`--no-typecheck` drops `tsc` from it. That is the form the agents run after every
+edit — the orchestrator runs the complete fast gate the moment they hand back, so
+a type error cannot survive the iteration — and it is what keeps a one-line edit
+from paying for a compilation.
+
+`craft:scope --allow <prefixes> [--stage <paths>]` is the **boundary check**: it
+lists everything that changed outside the prefixes an agent was allowed to write,
+reverts it, and optionally snapshots the allowed part into the git index and prints
+what was written. It replaces six commands the orchestrator used to run by hand
+between two agents. A tracked violation is restored from the index; an untracked one
+is deleted under `src/`, `tests/` and `features/`, and merely reported outside them
+— the loop never deletes a file it cannot be sure it created.
+
+`craft:commit "<message>"` closes an iteration: it regenerates the map when
+`src/domain` changed, stages, and commits. A failed map is reported and does not
+stop the commit.
 
 `craft:map` regenerates `.craft/api-map.d.ts`: every public signature of
 `src/domain`, no method bodies. It is what a fresh agent reads to learn what
@@ -167,6 +192,27 @@ One point matters at setup time: **the two fake directories are deliberate.**
 duplicated on purpose. `features/**` never imports from `tests/**`, and the reverse
 — so neither suite can break the other by changing a shared helper.
 
+### The `Option` type
+
+`Option.ts` is the one piece of domain code this skill writes, and it is
+deliberate: rule 2 bans `undefined` and `null` from `src/domain/**`, so the type
+that replaces them has to exist before the first scenario is written. It ships
+with its own test file, so it lands already at 100% and the coverage gate stays
+meaningful from the first iteration.
+
+It depends only on `immutable` (for `equals`/`hashCode`, so an `Option` composes
+inside a `Record`) and on `neverthrow` (for `okOr`, which turns an absence into a
+named domain failure). Copy both files verbatim; if the project already has an
+`Option`, report the divergence rather than overwriting it.
+
+```bash
+ASSETS="${CLAUDE_PLUGIN_ROOT}/skills/craft-setup/assets"
+cp "$ASSETS/Option.ts" src/domain/Option.ts
+cp "$ASSETS/Option.test.ts" tests/domain/Option.test.ts
+```
+
+The two destination directories were created by the layout above.
+
 ## 5. Add to .gitignore
 
 ```
@@ -183,8 +229,8 @@ commit of the loop, so committing it would only add conflicts.
 
 ```bash
 yarn typecheck
-yarn test         # "no test files found" is the expected result on an empty project
-yarn coverage
+yarn test         # Option.test.ts is the only suite at this point, and it is green
+yarn coverage     # src/domain/Option.ts at 100% on all four metrics
 ```
 
 Step definitions will import their assertions explicitly
@@ -193,11 +239,10 @@ Step definitions will import their assertions explicitly
 
 The two loop scripts are **not** run here, and neither is a failure at this stage:
 
-- `yarn craft:verify` and `yarn craft:verify:fast` need at least one test and one
-  scenario — on an empty project vitest and cucumber both exit non-zero on finding
-  nothing.
-- `yarn craft:map` needs a `src/domain` that compiles, and this skill deliberately
-  leaves `src/` empty.
+- `yarn craft:verify` and `yarn craft:verify:fast` need at least one scenario —
+  and there is none yet, so cucumber exits non-zero on finding nothing.
+- `yarn craft:map` would emit a map holding `Option` alone. Leave it to the loop,
+  which regenerates it at every iteration.
 
 The loop runs both from its first iteration onwards, and its agents treat a missing
 map as "nothing exists yet".
@@ -206,6 +251,11 @@ Report the final state and point the user at the `craft` skill to start the loop
 
 ## What this skill does not do
 
-It writes no domain code, no value object, no `Result` helper and no example.
-The first line of `src/` is written by the `implementer` agent, driven by a test.
-Scaffolding a domain here would hand the loop code that no scenario asked for.
+Apart from `Option.ts` and its test, it writes no domain code: no value object, no
+entity, no `Result` helper, no example. Everything else under `src/` is written by
+the `implementer` agent, driven by a test. Scaffolding a domain here would hand the
+loop code that no scenario asked for.
+
+`Option` is the exception because it is the vocabulary the rules are stated in, not
+a piece of the business: no scenario can ask for it, and every scenario that
+mentions something optional needs it already there.

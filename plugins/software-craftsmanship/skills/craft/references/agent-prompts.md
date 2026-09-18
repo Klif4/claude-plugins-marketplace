@@ -114,7 +114,7 @@ any, as unknown as, @ts-ignore or @ts-expect-error to work around that.
 Do not search wider than features/, tests/ and src/domain/. Never glob `**/*`.
 
 Confirm the failure is real, with the feature-scoped gate and nothing heavier:
-yarn craft:verify:fast --feature <path> <the tests/ files you wrote>
+yarn craft:verify:fast --no-typecheck --feature <path> <the tests/ files you wrote>
 
 Return the exact paths written, the scenarios each one covers, and the API the
 implementation will have to provide.
@@ -154,7 +154,7 @@ Do not search wider than src/ and the test files listed above. Never glob `**/*`
 VERIFY — this feature file only. Never run yarn craft:verify: the whole suite and
 the coverage gate are the orchestrator's, run once at the end of the iteration, and
 running them here costs minutes per attempt.
-yarn craft:verify:fast --feature <path> <the tests/ files listed above>
+yarn craft:verify:fast --no-typecheck --feature <path> <the tests/ files listed above>
 
 Return the files written, the last lines of that command, and any test you believe
 is wrong — without having modified it.

@@ -93,7 +93,13 @@ yarn craft:verify:fast --feature <path> <the unit test files just written>
 |---|---|
 | The new unit tests are green | `vitest run --reporter=dot <those files>` |
 | Every scenario of this file is green | `cucumber-js <path>` |
-| The project typechecks | `tsc --noEmit` |
+| The project typechecks | `tsc --noEmit`, incremental |
+
+The three are independent, so they run concurrently: the gate costs the slowest of
+them instead of their sum. Inside the agents it runs as
+`craft:verify:fast --no-typecheck` — they repeat it after every edit, and the
+orchestrator runs the complete gate the moment they hand back, so a type error
+cannot survive the iteration.
 
 Once it is green, the file passes the full gate before the loop moves on:
 
@@ -126,6 +132,48 @@ nobody asked for, and the implementer deletes it rather than defending it. Use
 cases and the `UseCaseFactory` live in `src/domain/`, so they are under that gate
 too — `src/application/` and `src/infrastructure/` are not.
 
+## Two scripts between two agents
+
+Everything the orchestrator does between two agent launches is two calls, not a
+dozen:
+
+```bash
+yarn craft:scope --allow tests/ features/steps/ --stage tests features
+yarn craft:commit "feat(checkout): minimum order amount"
+```
+
+`craft:scope` lists what the agent wrote outside its allow-list, reverts it,
+snapshots the allowed part into the index and prints what was written.
+`craft:commit` regenerates the API map when `src/domain` changed, stages and
+commits. Each command the orchestrator does not run is a model round-trip — and,
+unless it is pre-approved, an approval prompt — that the loop pays between every
+pair of agents.
+
+Which is the other half of the wall-clock. These are the commands worth
+pre-approving in the project's `.claude/settings.json`:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "Bash(yarn craft:verify)",
+      "Bash(yarn craft:verify:fast:*)",
+      "Bash(yarn craft:scope:*)",
+      "Bash(yarn craft:map)",
+      "Bash(yarn test:*)",
+      "Bash(yarn typecheck)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git ls-files:*)"
+    ]
+  }
+}
+```
+
+Deliberately **not** in that list: `yarn craft:commit` — it writes history — and
+every raw `git checkout`, `git add` and `rm`. The loop reverts out-of-scope work,
+and a revert is the one thing worth looking at before it happens.
+
 ## Contents
 
 | Path | Role |
@@ -139,6 +187,9 @@ too — `src/application/` and `src/infrastructure/` are not.
 | `agents/implementer.md` | Writes `src/**`. Never touches a test. |
 | `hooks/hooks.json` | Registers the `PreToolUse` guard below |
 | `scripts/craft-guard.sh` | Dispatches on `agent_type`: refuses a `Write`/`Edit` outside the agent's allow-list, and `git` or dependency installs from the test-writer and implementer |
+
+The project-side scripts — `craft-verify.mjs`, `craft-map.mjs`, `craft-scope.mjs`
+and `craft-commit.mjs` — are laid down in `scripts/` by `craft-setup`.
 
 ## Usage
 
@@ -191,6 +242,11 @@ The package manager is **yarn**.
 
 - The domain throws nothing: `Result` / `ResultAsync` from `neverthrow`, with named
   domain errors.
+- No `undefined`, no `null`: a value that may be missing is an `Option<T>` from
+  `src/domain/Option.ts`, and the caller stays in the chain (`map`, `andThen`,
+  `unwrapOr`, `match`). An adapter converts a library's nullable on the spot with
+  `Option.fromNullable`; an absence that is really a business failure crosses over
+  with `okOr`.
 - Everything immutable: `readonly`, private constructors, static factories, methods
   returning new instances. Every iterable is an `immutable` `List`, `Map`, `Set` or
   `Record`.

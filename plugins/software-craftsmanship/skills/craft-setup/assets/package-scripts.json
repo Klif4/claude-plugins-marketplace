@@ -8,6 +8,8 @@
     "typecheck": "tsc --noEmit",
     "craft:verify": "node scripts/craft-verify.mjs",
     "craft:verify:fast": "node scripts/craft-verify.mjs --fast",
-    "craft:map": "node scripts/craft-map.mjs"
+    "craft:map": "node scripts/craft-map.mjs",
+    "craft:scope": "node scripts/craft-scope.mjs",
+    "craft:commit": "node scripts/craft-commit.mjs"
   }
 }
