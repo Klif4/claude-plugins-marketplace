@@ -57,6 +57,82 @@ export type CheckoutFailure = BelowMinimumAmount | OrderAlreadyShipped
 The `_tag` discriminant lets a caller branch exhaustively without `instanceof`.
 Errors carry the data the caller needs to react — never a formatted message.
 
+## Absence is an `Option`, never `undefined`
+
+`undefined` and `null` do not exist in `src/domain/**`. Not as a return type, not
+as a property, not as an optional `?` parameter, not as a union member. A value
+that may be missing has a type that says so: `Option<T>`, from
+`src/domain/Option.ts` — laid down by `craft-setup`, with its own unit test, and
+the only domain file the loop does not write from a scenario.
+
+```ts
+// Refuses to say it: every caller must remember the hole, and the compiler
+// only helps under strictNullChecks — one `!` and it is gone
+nickname(): Nickname | undefined
+discountOf(order: Order): Discount | null
+place(customer: CustomerName, coupon?: CouponCode): Order
+
+// Says it: the hole is in the type, and the caller cannot forget it
+nickname(): Option<Nickname>
+discountOf(order: Order): Option<Discount>
+place(customer: CustomerName, coupon: Option<CouponCode>): Order
+```
+
+The caller never asks whether the value is there. It keeps chaining:
+
+```ts
+const label = customer
+  .nickname()
+  .map((nickname) => nickname.value())
+  .unwrapOr(customer.fullName().value())
+
+const invoiced = order
+  .coupon()
+  .andThen((coupon) => this.coupons.matching(coupon))
+  .filter((discount) => discount.appliesTo(order))
+  .match((discount) => order.discountedBy(discount), () => order)
+```
+
+`Option` also crosses into `Result` when absence *is* a business failure — that
+is what `okOr` is for, and it is where a named domain error earns its place:
+
+```ts
+const rate = this.rates
+  .forCurrency(amount.currency())
+  .okOr(new NoExchangeRateForCurrency(amount.currency()))
+  .map((exchangeRate) => exchangeRate.applyTo(amount))
+```
+
+Absence and failure are different things. `Option<T>` says *there may be nothing,
+and that is normal*. `Result<T, E>` says *this could not be done, and here is why*.
+A repository lookup that legitimately finds nothing returns an `Option`; one whose
+caller cannot continue without the row returns a `Result` with a named error.
+
+### At the boundary
+
+A library hands back `null` or `undefined` — a database driver, an HTTP payload, a
+`Map.get`. The adapter converts it on the spot, and nothing downstream ever sees
+the hole:
+
+```ts
+// src/infrastructure/PostgresCustomerRepository.ts
+nicknameOf(id: CustomerId): ResultAsync<Option<Nickname>, PersistenceFailure> {
+  return ResultAsync.fromPromise(
+    this.client.query(SELECT_NICKNAME, [id.value()]),
+    (cause) => new PersistenceFailure(cause),
+  ).map((rows) => Option.fromNullable(rows[0]?.nickname).map(Nickname.of))
+}
+```
+
+`Option.fromNullable` is the single place `undefined` is named, and it lives in
+`Option.ts`. Outside of it, an `undefined` anywhere under `src/domain/**` is a
+finding.
+
+### The one exception: `void`
+
+A method that returns nothing returns `void`, not `Option<void>`. Nothing is a
+value there; `void` already says the caller gets no answer.
+
 ## Result chaining
 
 ```ts
@@ -118,7 +194,7 @@ const placeOrder = (command: PlaceOrderCommand): ResultAsync<OrderId, PlaceOrder
   this.customers
     .byId(command.customerId())
     .andThen((customer) => customer.checkout(command.basket()))
-    .andThen((order) => this.orders.save(order).map(() => order.id()))
+    .andThen((order) => this.orders.save(order).map((saved) => saved.id()))
 ```
 
 ## Immutable collections
@@ -201,7 +277,7 @@ they sit inside an `immutable` `Record` and compare exactly under `toStrictEqual
 when the domain genuinely reasons about a named zone (`ZoneId.of('Europe/Paris')`),
 and import it once at the composition root, never from the domain.
 
-A date is still a primitive as far as rule 3 is concerned: `LocalDate` crossing a
+A date is still a primitive as far as rule 4 is concerned: `LocalDate` crossing a
 domain boundary as "some day" is fine inside a value object, but a method taking a
 bare `LocalDate` when the business says *delivery date* wants a `DeliveryDate`.
 
@@ -262,7 +338,7 @@ The port is an interface **in the domain**, named after the domain's need.
 ```ts
 // src/domain/OrderRepository.ts
 export interface OrderRepository {
-  save(order: Order): ResultAsync<void, PersistenceFailure>
+  save(order: Order): ResultAsync<Order, PersistenceFailure>
   byId(id: OrderId): ResultAsync<Order, OrderNotFound>
 }
 ```
@@ -272,13 +348,17 @@ allowed — to convert a library exception into a `Result` immediately.
 
 ```ts
 // src/infrastructure/PostgresOrderRepository.ts
-save(order: Order): ResultAsync<void, PersistenceFailure> {
+save(order: Order): ResultAsync<Order, PersistenceFailure> {
   return ResultAsync.fromPromise(
     this.client.query(INSERT_ORDER, toRow(order)),
     (cause) => new PersistenceFailure(cause),
-  ).map(() => undefined)
+  ).map(() => order)
 }
 ```
+
+A port returns the value it was given rather than `void` when the caller carries on
+with it: it keeps the chain flowing and spares a `.map(() => order)` at every call
+site.
 
 ## Use cases and the factory
 
@@ -299,7 +379,7 @@ export class PlaceOrder {
       .basket()
       .ensureReachesMinimum(MINIMUM_ORDER_AMOUNT)
       .asyncAndThen((eligible) => Order.placedAt(this.clock.now(), eligible))
-      .andThen((order) => this.orders.save(order).map(() => order))
+      .andThen((order) => this.orders.save(order))
       .andThen((order) => this.notifier.notifyOrderPlaced(order).map(() => order.id()))
   }
 }
@@ -428,7 +508,8 @@ device showing where a snippet lives — they are not part of the code to copy.
 `src/domain/**` is gated at 100% coverage. An uncovered branch is almost always
 one of:
 
-- a defensive guard against a state the type system already prevents;
+- a defensive guard against a state the type system already prevents — an
+  emptiness check on something that is already an `Option`, among others;
 - a speculative case no scenario describes;
 - an optional parameter nobody passes;
 - an unused public method left behind by a refactoring.
