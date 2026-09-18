@@ -19,6 +19,13 @@
 
     "noEmit": true,
     "skipLibCheck": true,
+
+    // The loop runs `tsc --noEmit` after every edit an agent makes. Incremental
+    // reuses the previous run's type information, turning a whole-project
+    // recompilation into a check of what changed. `.craft/` is gitignored.
+    "incremental": true,
+    "tsBuildInfoFile": ".craft/tsbuildinfo",
+
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
 

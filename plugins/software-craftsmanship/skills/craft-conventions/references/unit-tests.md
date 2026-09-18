@@ -104,7 +104,7 @@ reads as domain vocabulary and its behaviour is inspectable.
 export class InMemoryOrderRepository implements OrderRepository {
   private orders: Map<OrderId, Order> = Map()
 
-  save(order: Order): ResultAsync<void, PersistenceFailure> { … }
+  save(order: Order): ResultAsync<Order, PersistenceFailure> { … }
   byId(id: OrderId): ResultAsync<Order, OrderNotFound> { … }
 }
 ```
@@ -188,6 +188,28 @@ already a bug.
 
 Reach for `_unsafeUnwrap()` only inside builders, never in an assertion: unwrapping
 in a test discards the failure case the assertion was supposed to pin down.
+
+## Asserting on `Option`
+
+An absent value is `Option.empty()`, never `undefined`. Assert the whole `Option`
+the same way as a `Result` — both classes implement structural equality, so
+`toStrictEqual` is exact.
+
+```ts
+expect(customerWithoutNickname().nickname()).toStrictEqual(Option.empty<Nickname>())
+
+expect(customerNicknamed('Cam').nickname().map((nickname) => nickname.value()))
+  .toStrictEqual(Option.of('Cam'))
+```
+
+Never assert `toBeUndefined()` or `toBeNull()` against domain code: a domain that
+returns `undefined` is already a bug, and the assertion pins the bug in place.
+Never unwrap first either — `expect(option.unwrapOr(fallback)).toBe(fallback)`
+passes whether the option was empty or happened to hold the fallback.
+
+Two options in the same spot deserve two tests: the one where the value is there
+and the one where it is not. An `Option` with only its present case tested is a
+branch the 100% gate will catch anyway.
 
 ## The expected side is a value written in the test, never a recomputation
 

@@ -1,6 +1,6 @@
 ---
 name: craft-review
-description: This skill should be used when the user asks to "review this for craft", "craft audit", "audit my domain", "check craft conventions", "is this code idiomatic craft", "find primitive obsession", "find code that throws", "check for mutations", "are these tests coupled to the implementation", or wants existing TypeScript audited against software craftsmanship rules. It reports violations of immutability, no-throw, primitive obsession, tell-don't-ask, hexagonal layering, native Date usage instead of js-joda, use cases misplaced outside the domain or built without the UseCaseFactory, and implementation-coupled tests, ranked by cost to fix later.
+description: This skill should be used when the user asks to "review this for craft", "craft audit", "audit my domain", "check craft conventions", "is this code idiomatic craft", "find primitive obsession", "find undefined in the domain", "find code that throws", "check for mutations", "are these tests coupled to the implementation", or wants existing TypeScript audited against software craftsmanship rules. It reports violations of immutability, no-throw, `undefined`/`null` where an `Option` belongs, primitive obsession, tell-don't-ask, hexagonal layering, native Date usage instead of js-joda, use cases misplaced outside the domain or built without the UseCaseFactory, and implementation-coupled tests, ranked by cost to fix later.
 argument-hint: "[path, or nothing to review the current diff]"
 allowed-tools: Read, Grep, Glob, Bash
 ---
@@ -45,6 +45,11 @@ when the target is the whole project; narrow them to `$TARGET` otherwise. Add
 ```bash
 # Exceptions in the domain
 grep -rnE '\bthrow\b|\btry\s*\{' src/domain
+
+# Absence modelled as undefined or null instead of Option
+grep -rnE '\b(undefined|null)\b' src/domain | grep -v 'src/domain/Option.ts'
+grep -rnE '\w\?\s*[:)]|\?\.|\w!\.|\w!\s*[,)]' src/domain
+grep -rnE 'toBeUndefined\(|toBeNull\(|toBeDefined\(' tests features
 
 # Mutation and imperative style
 grep -rnE '\blet\b|\bfor\s*\(|\bwhile\s*\(|\.push\(|\.pop\(|\.splice\(|\.sort\(' src/domain
@@ -112,6 +117,18 @@ Rank by what it costs to fix later, not by how many hits there are.
 
 **2. Behavioural — silent bugs**
 - `throw` in `domain`: a failure path invisible in the signature.
+- `undefined` or `null` in `src/domain/**` — a return type, a property, an
+  optional `?` parameter, a union member, a `!` non-null assertion. The absence is
+  invisible in the vocabulary and every caller has to remember it. Report the
+  `Option<T>` it should be, and whether the absence is really a business failure
+  that wants `.okOr(new SomeNamedFailure(...))` instead. `src/domain/Option.ts`
+  itself is the one file exempt: `Option.fromNullable` is where the conversion
+  lives.
+- A nullable value from a library reaching past its adapter: the boundary should
+  have converted it with `Option.fromNullable` on the spot.
+- An emptiness check on something already typed as an `Option` — `isSome`-style
+  branching reintroduced by hand instead of `map` / `andThen` / `unwrapOr` /
+  `match`. It is tell-don't-ask, one level down.
 - A native `Date`, a `Date.now()` or an epoch `number` where a business date
   belongs: report the js-joda type it should be (`LocalDate` for a calendar day,
   `Instant` for a point in time, `Duration`/`Period` for an elapsed amount).
@@ -131,6 +148,11 @@ Rank by what it costs to fix later, not by how many hits there are.
 - `.skip` / `.todo` / `.only` left behind: `.only` silently shrinks the suite.
 - Placeholder data (`foo`, `test`, `123`): a test whose values say nothing about
   the rule.
+- `toBeUndefined()` / `toBeNull()` against domain code: a domain that returns
+  `undefined` is already a bug, and the assertion pins it in place. The expected
+  value is `Option.empty<T>()`.
+- An optional value with only its present case asserted: the empty case is a
+  branch nobody specified.
 - A test that reads the real clock, or computes an expected date from the current
   one: it passes today and fails on a boundary day. It should use a fixed clock and
   a literal date.

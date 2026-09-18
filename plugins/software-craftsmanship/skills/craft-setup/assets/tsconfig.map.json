@@ -8,6 +8,10 @@
     "rootDir": "./src/domain",
     "outDir": ".craft/dts",
 
+    // Its own build info: this config compiles a different file set than
+    // tsconfig.json, and sharing one file would make each run invalidate the other.
+    "tsBuildInfoFile": ".craft/tsbuildinfo.map",
+
     // The map is a reading aid, not a build: an unused parameter in the domain is
     // a matter for `yarn typecheck`, and must not stop the map from regenerating.
     "noUnusedLocals": false,

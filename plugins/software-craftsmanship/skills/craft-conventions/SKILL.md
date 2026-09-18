@@ -1,6 +1,6 @@
 ---
 name: craft-conventions
-description: This skill should be used when writing TypeScript by hand, outside the craft loop, in a project recognisable by neverthrow, immutable and @js-joda/core in its package.json, a features/ directory of .feature files, or a src/domain + src/application + src/infrastructure layout. Also when the user asks "follow the craft conventions", "what are our rules for value objects", "how do we write step definitions here", "how do we handle errors without throwing", "where do use cases go", "how do we build a use case", "how do we handle dates here". It carries the rulebook shared by the bdd-writer, test-writer and implementer agents, so hand-written code matches agent-written code. For auditing existing code against these rules, use craft-review instead.
+description: This skill should be used when writing TypeScript by hand, outside the craft loop, in a project recognisable by neverthrow, immutable and @js-joda/core in its package.json, a features/ directory of .feature files, or a src/domain + src/application + src/infrastructure layout. Also when the user asks "follow the craft conventions", "what are our rules for value objects", "how do we write step definitions here", "how do we handle errors without throwing", "how do we represent a value that may be absent", "where do use cases go", "how do we build a use case", "how do we handle dates here". It carries the rulebook shared by the bdd-writer, test-writer and implementer agents, so hand-written code matches agent-written code. For auditing existing code against these rules, use craft-review instead.
 ---
 
 # Craft conventions
@@ -12,38 +12,46 @@ already exists, use `craft-review`, which produces a ranked report.
 Everything — scenarios, tests, code, identifiers — is written in **English**.
 The package manager is **yarn**.
 
-## The eight rules that decide most reviews
+## The nine rules that decide most reviews
 
 1. **The domain throws nothing.** Every fallible operation returns
    `Result<T, E>` from `neverthrow`, with named domain errors. `try/catch` exists
    only in `infrastructure`, to convert a library exception into a `Result` on the
    spot.
-2. **Everything is immutable.** `readonly` properties, `private` constructors,
+2. **Absence is a value, and its name is `Option`.** `undefined` and `null` never
+   appear in `src/domain/**` — not as a return type, not as a property, not as an
+   optional `?` parameter, not as a union member. Something that may be missing is
+   an `Option<T>` from `@domain/Option`, and the caller gets at it through
+   `map`, `andThen`, `unwrapOr`, `okOr` or `match` — never by testing for
+   emptiness first. An adapter that receives a nullable value from a library
+   converts it on the spot with `Option.fromNullable`, and nothing downstream
+   ever sees the hole.
+3. **Everything is immutable.** `readonly` properties, `private` constructors,
    static factories, and methods that return a new instance instead of mutating.
    Every iterable is an `immutable` `List`, `Map`, `Set` or `Record` — never a
    native array, never an object literal used as a dictionary.
-3. **No primitive obsession.** No bare `string`, `number` or `boolean` crosses a
+4. **No primitive obsession.** No bare `string`, `number` or `boolean` crosses a
    domain boundary. `Money`, `OrderId`, `EmailAddress` — each validating in its
    own factory.
-4. **Tell, don't ask.** Objects expose behaviour, not innards. `order.cancel()`,
+5. **Tell, don't ask.** Objects expose behaviour, not innards. `order.cancel()`,
    never `if (order.status === 'PENDING')`. A getter exists for presentation at the
    edge, and nowhere else.
-5. **Tests assert behaviour.** What is observable from outside: the returned value,
+6. **Tests assert behaviour.** What is observable from outside: the returned value,
    the `Result`, the state reached through the public API, the command sent on an
    outgoing port. A test that breaks when a private method is renamed is a wrong
    test.
-6. **Time is a value, and it is injected.** Every date, time, instant and duration
+7. **Time is a value, and it is injected.** Every date, time, instant and duration
    comes from `@js-joda/core` — `LocalDate`, `LocalDateTime`, `Instant`,
    `ZonedDateTime`, `Duration`, `Period`. Never the native `Date`, never a
    timestamp as a `number`. The present moment is never read from ambient state:
    it arrives through a `Clock` port, so every time-dependent rule is testable at
    an exact instant.
-7. **Use cases live in the domain, and the factory builds them.** A use case is
+8. **Use cases live in the domain, and the factory builds them.** A use case is
    business orchestration, not plumbing: it sits in `src/domain/usecases/` and
    depends on ports only. Nothing instantiates a use case with `new` except the
    `UseCaseFactory` — controllers, CLI entry points and step definitions all ask
    the factory.
-8. **The code carries no comments.** No explanatory comment, no header banner, no
+9. **The code carries no comments.** No explanatory comment, no header banner, no
    section divider, no commented-out code, no `TODO`. If something needs
    explaining, the code is not saying it yet: rename the variable, extract a method
    whose name is the sentence you were about to write, or turn the condition into a
@@ -53,8 +61,9 @@ The package manager is **yarn**.
 ## Layering
 
 ```
-src/domain/         entities, value objects, domain errors, ports (interfaces),
-                    use cases (usecases/), and the UseCaseFactory that builds them
+src/domain/         entities, value objects, domain errors, Option, ports
+                    (interfaces), use cases (usecases/), and the UseCaseFactory
+                    that builds them
 src/infrastructure/ concrete adapters — implement the ports
 src/application/    composition root — instantiates the adapters, builds the
                     factory, and exposes the app: HTTP controllers, CLI, entry point
@@ -152,7 +161,7 @@ which shape wins; the bans on `let`, loops and mutation hold in either.
   tables, builders, when a `mock<Port>()` beats a hand-written fake, asserting on
   `Result`, and the assertions that couple a test to an implementation.
 - **`references/implementation.md`** — value objects, `Result` chaining and when to
-  break a chain, Immutable
+  break a chain, `Option` in place of `undefined`, Immutable
   collections, dates with js-joda, tell-don't-ask, use cases and the
   `UseCaseFactory`, ports and adapters, with before/after code.
 - **`references/tooling.md`** — yarn scripts, Vitest coverage thresholds, running

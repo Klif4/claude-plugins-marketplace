@@ -170,6 +170,18 @@ independence of each suite.
   unwrapping with `_unsafeUnwrap()`.
 - Never write `expect(() => …).toThrow()` against domain code.
 
+**Asserting on Options**
+- The domain has no `undefined` and no `null`: something that may be missing is an
+  `Option<T>` from `@domain/Option`.
+- Assert the whole option: `expect(outcome).toStrictEqual(Option.empty<Nickname>())`
+  or `expect(outcome.map((n) => n.value())).toStrictEqual(Option.of('Cam'))`.
+  `Option` implements structural equality, so `toStrictEqual` is exact.
+- Never `toBeUndefined()` / `toBeNull()` against domain code, and never unwrap
+  first: `expect(option.unwrapOr(fallback)).toBe(fallback)` passes whether the
+  option was empty or happened to hold the fallback.
+- Specify both sides. An optional value with only its present case tested leaves a
+  branch the 100% gate will fail on.
+
 **The expected side is a value you write, never a recomputation**
 - `expected` above is a literal, a builder default, or a case-table entry —
   never a second call to the method, function or algorithm under test with the
@@ -190,8 +202,12 @@ independence of each suite.
 Run the feature-scoped gate your prompt names, and **observe red**:
 
 ```bash
-yarn craft:verify:fast --feature <the .feature file> <the tests/ files you wrote>
+yarn craft:verify:fast --no-typecheck --feature <the .feature file> <the tests/ files you wrote>
 ```
+
+`--no-typecheck` drops `tsc` from the run: the manager runs the full fast gate,
+typecheck included, the moment you hand back, so a type error in your tests is
+caught there rather than costing you a whole-project compilation on every attempt.
 
 Never run the bare `yarn craft:verify`. That is the full gate — the whole unit
 suite, coverage instrumentation over the domain and every feature file already
